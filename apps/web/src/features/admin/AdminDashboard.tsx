@@ -106,7 +106,9 @@ type ReorderItem = {
   order: number;
 };
 
-type ProjectDraftOrder = string[] | null;
+type DraftOrder = string[] | null;
+type ProjectDraftOrder = DraftOrder;
+type ExperienceDraftOrder = DraftOrder;
 
 type UploadFieldKind = 'image' | 'logo' | 'resumePdf';
 
@@ -297,10 +299,7 @@ function areSameIdOrder(left: string[], right: string[]): boolean {
   return true;
 }
 
-function reconcileProjectDraftOrder(
-  draftIds: string[] | null,
-  canonicalIds: string[],
-): ProjectDraftOrder {
+function reconcileDraftOrder(draftIds: DraftOrder, canonicalIds: string[]): DraftOrder {
   if (!draftIds) {
     return null;
   }
@@ -845,6 +844,7 @@ const SectionCard = memo(
         <p className="line-clamp-3 text-sm text-muted-foreground">{getCardBody(sectionId, item, context)}</p>
 
         <div className="mt-3 flex flex-wrap gap-2">
+          {sectionId === 'experiences' && item.isCurrent === true ? <Badge variant="outline">Current role</Badge> : null}
           {sectionId === 'technologies' ? <Badge variant="outline">{asText(item.category)}</Badge> : null}
           {sectionId === 'languages' ? <Badge variant="outline">{asText(item.level)}</Badge> : null}
           {sectionId === 'providers' ? (
@@ -940,6 +940,76 @@ function ProjectOrderToolbar({ hasChanges, isSaving, onSave, onReset }: ProjectO
           <Button type="button" onClick={onSave} disabled={isSaving || !hasChanges}>
             {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             {isSaving ? 'Saving order...' : 'Save Order'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type ExperienceCurrentRoleOption = {
+  id: string;
+  label: string;
+};
+
+type ExperienceLayoutToolbarProps = {
+  hasChanges: boolean;
+  isSaving: boolean;
+  currentRoleId: string | null;
+  currentRoleOptions: ExperienceCurrentRoleOption[];
+  onCurrentRoleChange: (nextCurrentRoleId: string | null) => void;
+  onSave: () => void;
+  onReset: () => void;
+};
+
+function ExperienceLayoutToolbar({
+  hasChanges,
+  isSaving,
+  currentRoleId,
+  currentRoleOptions,
+  onCurrentRoleChange,
+  onSave,
+  onReset,
+}: ExperienceLayoutToolbarProps) {
+  return (
+    <div className="space-y-3 rounded-2xl border border-border/60 bg-background-subtle/30 p-4">
+      <div className="space-y-1">
+        <p className="text-sm font-medium text-foreground">Experience layout</p>
+        <p className="text-xs text-muted-foreground">
+          Drag cards by the handle to reorder and set which role is marked as current.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <label className="min-w-64 flex-1">
+          <span className="mb-2 block text-xs font-mono uppercase tracking-wider text-muted-foreground">Current role</span>
+          <select
+            className="w-full rounded-lg border border-border/60 bg-background-subtle/30 px-3 py-2 text-sm"
+            value={currentRoleId ?? ''}
+            onChange={(event) => {
+              const nextValue = event.target.value.trim();
+              onCurrentRoleChange(nextValue === '' ? null : nextValue);
+            }}
+            disabled={isSaving}
+          >
+            <option value="">None</option>
+            {currentRoleOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {hasChanges ? <Badge variant="outline">Unsaved experience changes</Badge> : null}
+          <Button type="button" variant="outline" onClick={onReset} disabled={isSaving || !hasChanges}>
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Reset
+          </Button>
+          <Button type="button" onClick={onSave} disabled={isSaving || !hasChanges}>
+            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            {isSaving ? 'Saving layout...' : 'Save Layout'}
           </Button>
         </div>
       </div>
@@ -1068,6 +1138,143 @@ function SortableProjectGrid({
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {items.map((item, index) => (
             <SortableProjectCard
+              key={asId(item._id)}
+              item={item}
+              position={index + 1}
+              context={context}
+              isSelected={selectedItemId === asId(item._id)}
+              onOpen={onOpen}
+              onEdit={onEdit}
+              onDelete={onDelete}
+            />
+          ))}
+        </div>
+      </SortableContext>
+    </DndContext>
+  );
+}
+
+type SortableExperienceCardProps = {
+  item: AdminEntity;
+  position: number;
+  context: LookupContext;
+  isSelected: boolean;
+  onOpen: (id: string) => void;
+  onEdit: (id: string) => void;
+  onDelete: (id: string) => void;
+};
+
+function SortableExperienceCard({
+  item,
+  position,
+  context,
+  isSelected,
+  onOpen,
+  onEdit,
+  onDelete,
+}: SortableExperienceCardProps) {
+  const itemId = asId(item._id);
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+    id: itemId,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn('touch-manipulation', isDragging ? 'z-20 opacity-80' : undefined)}
+    >
+      <SectionCard
+        sectionId="experiences"
+        item={item}
+        context={context}
+        isSelected={isSelected}
+        orderLabel={String(position)}
+        dragHandle={
+          <button
+            ref={setActivatorNodeRef}
+            type="button"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border/70 text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+            aria-label={`Reorder ${asText(item.role, 'experience')}`}
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="h-3.5 w-3.5" />
+          </button>
+        }
+        onOpen={onOpen}
+        onEdit={onEdit}
+        onDelete={onDelete}
+      />
+    </div>
+  );
+}
+
+type SortableExperienceGridProps = {
+  items: AdminEntity[];
+  selectedItemId: string | null;
+  context: LookupContext;
+  onOpen: (id: string) => void;
+  onEdit: (id: string) => void;
+  onDelete: (id: string) => void;
+  onReorder: (nextIds: string[]) => void;
+};
+
+function SortableExperienceGrid({
+  items,
+  selectedItemId,
+  context,
+  onOpen,
+  onEdit,
+  onDelete,
+  onReorder,
+}: SortableExperienceGridProps) {
+  const ids = useMemo(() => items.map((item) => asId(item._id)), [items]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 180, tolerance: 6 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  const onDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) {
+        return;
+      }
+
+      const oldIndex = ids.indexOf(String(active.id));
+      const newIndex = ids.indexOf(String(over.id));
+
+      if (oldIndex < 0 || newIndex < 0) {
+        return;
+      }
+
+      onReorder(arrayMove(ids, oldIndex, newIndex));
+    },
+    [ids, onReorder],
+  );
+
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+      <SortableContext items={ids} strategy={rectSortingStrategy}>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {items.map((item, index) => (
+            <SortableExperienceCard
               key={asId(item._id)}
               item={item}
               position={index + 1}
@@ -1825,12 +2032,18 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
   const bootstrap = useQuery(api.admin.getAdminBootstrap) as BootstrapData | undefined;
   const generateUploadUrl = useMutation(api.admin.generateUploadUrl);
   const resolveStorageUrl = useMutation(api.admin.resolveStorageUrl);
+  const reorderExperiences = useMutation(api.admin.reorderExperiences);
   const reorderProjects = useMutation(api.admin.reorderProjects);
 
   const [activeSectionId, setActiveSectionId] = useState<SectionId>('site-settings');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [panelMode, setPanelMode] = useState<InspectorMode>('view');
   const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
+  const [experienceDraftOrderIds, setExperienceDraftOrderIds] = useState<ExperienceDraftOrder>(null);
+  const [experienceDraftCurrentRoleId, setExperienceDraftCurrentRoleId] = useState<string | null | undefined>(
+    undefined,
+  );
+  const [isSavingExperienceLayout, setIsSavingExperienceLayout] = useState(false);
   const [projectDraftOrderIds, setProjectDraftOrderIds] = useState<ProjectDraftOrder>(null);
   const [isSavingProjectOrder, setIsSavingProjectOrder] = useState(false);
 
@@ -1847,6 +2060,24 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
   }, [isDesktop]);
 
   const data = bootstrap ?? DEFAULT_BOOTSTRAP;
+  const sortedExperiences = useMemo(() => sortByOrder(data.experiences), [data.experiences]);
+  const canonicalExperienceOrderIds = useMemo(
+    () => sortedExperiences.map((item) => asId(item._id)),
+    [sortedExperiences],
+  );
+  const experiencesById = useMemo(
+    () => new Map(sortedExperiences.map((item) => [asId(item._id), item])),
+    [sortedExperiences],
+  );
+  const canonicalCurrentExperienceId = useMemo(() => {
+    for (const item of sortedExperiences) {
+      if (item.isCurrent === true) {
+        return asId(item._id);
+      }
+    }
+    return null;
+  }, [sortedExperiences]);
+
   const sortedProjects = useMemo(() => sortByOrder(data.projects), [data.projects]);
   const canonicalProjectOrderIds = useMemo(
     () => sortedProjects.map((item) => asId(item._id)),
@@ -1858,8 +2089,36 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
   );
 
   useEffect(() => {
+    setExperienceDraftOrderIds((current) => {
+      const reconciled = reconcileDraftOrder(current, canonicalExperienceOrderIds);
+      if (reconciled === null) {
+        return null;
+      }
+      if (current && areSameIdOrder(current, reconciled)) {
+        return current;
+      }
+      return areSameIdOrder(reconciled, canonicalExperienceOrderIds) ? null : reconciled;
+    });
+  }, [canonicalExperienceOrderIds]);
+
+  useEffect(() => {
+    setExperienceDraftCurrentRoleId((current) => {
+      if (current === undefined) {
+        return undefined;
+      }
+      if (current === canonicalCurrentExperienceId) {
+        return undefined;
+      }
+      if (current !== null && !experiencesById.has(current)) {
+        return undefined;
+      }
+      return current;
+    });
+  }, [canonicalCurrentExperienceId, experiencesById]);
+
+  useEffect(() => {
     setProjectDraftOrderIds((current) => {
-      const reconciled = reconcileProjectDraftOrder(current, canonicalProjectOrderIds);
+      const reconciled = reconcileDraftOrder(current, canonicalProjectOrderIds);
       if (reconciled === null) {
         return null;
       }
@@ -1869,6 +2128,52 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
       return areSameIdOrder(reconciled, canonicalProjectOrderIds) ? null : reconciled;
     });
   }, [canonicalProjectOrderIds]);
+
+  const hasExperienceOrderChanges = useMemo(() => {
+    if (!experienceDraftOrderIds) {
+      return false;
+    }
+    return !areSameIdOrder(experienceDraftOrderIds, canonicalExperienceOrderIds);
+  }, [experienceDraftOrderIds, canonicalExperienceOrderIds]);
+
+  const hasExperienceCurrentRoleChanges = useMemo(() => {
+    return (
+      experienceDraftCurrentRoleId !== undefined &&
+      experienceDraftCurrentRoleId !== canonicalCurrentExperienceId
+    );
+  }, [experienceDraftCurrentRoleId, canonicalCurrentExperienceId]);
+
+  const hasExperienceChanges = hasExperienceOrderChanges || hasExperienceCurrentRoleChanges;
+
+  const effectiveCurrentExperienceId = useMemo(
+    () =>
+      experienceDraftCurrentRoleId === undefined
+        ? canonicalCurrentExperienceId
+        : experienceDraftCurrentRoleId,
+    [experienceDraftCurrentRoleId, canonicalCurrentExperienceId],
+  );
+
+  const effectiveExperienceItems = useMemo(() => {
+    if (!experienceDraftOrderIds || experienceDraftOrderIds.length === 0) {
+      return sortedExperiences;
+    }
+
+    const ordered = experienceDraftOrderIds
+      .map((id) => experiencesById.get(id))
+      .filter((item): item is AdminEntity => Boolean(item));
+
+    if (ordered.length !== sortedExperiences.length) {
+      const orderedIdSet = new Set(ordered.map((item) => asId(item._id)));
+      for (const item of sortedExperiences) {
+        const id = asId(item._id);
+        if (!orderedIdSet.has(id)) {
+          ordered.push(item);
+        }
+      }
+    }
+
+    return ordered;
+  }, [experienceDraftOrderIds, experiencesById, sortedExperiences]);
 
   const hasProjectOrderChanges = useMemo(() => {
     if (!projectDraftOrderIds) {
@@ -1949,6 +2254,15 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
           label: `${asText(category.label)} (${asText(category.name)})`,
         })),
     [data.aboutCategories],
+  );
+
+  const experienceCurrentRoleOptions = useMemo<ExperienceCurrentRoleOption[]>(
+    () =>
+      sortedExperiences.map((experience) => ({
+        id: asId(experience._id),
+        label: `${asText(experience.company)} · ${asText(experience.role)} (${asText(experience.duration)})`,
+      })),
+    [sortedExperiences],
   );
 
   const sectionConfigs = useMemo<Record<EntitySectionId, AdminSectionConfig>>(
@@ -2147,8 +2461,13 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
   );
 
   const displayItems = useMemo(
-    () => (activeSectionId === 'projects' ? effectiveProjectItems : sortedItems),
-    [activeSectionId, effectiveProjectItems, sortedItems],
+    () =>
+      activeSectionId === 'projects'
+        ? effectiveProjectItems
+        : activeSectionId === 'experiences'
+          ? effectiveExperienceItems
+          : sortedItems,
+    [activeSectionId, effectiveExperienceItems, effectiveProjectItems, sortedItems],
   );
 
   const selectedItem = useMemo(
@@ -2209,6 +2528,24 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
     [isDesktop],
   );
 
+  const handleExperienceReorder = useCallback((nextIds: string[]) => {
+    setExperienceDraftOrderIds(nextIds);
+  }, []);
+
+  const handleExperienceCurrentRoleChange = useCallback(
+    (nextCurrentRoleId: string | null) => {
+      setExperienceDraftCurrentRoleId(
+        nextCurrentRoleId === canonicalCurrentExperienceId ? undefined : nextCurrentRoleId,
+      );
+    },
+    [canonicalCurrentExperienceId],
+  );
+
+  const resetExperienceLayoutDraft = useCallback(() => {
+    setExperienceDraftOrderIds(null);
+    setExperienceDraftCurrentRoleId(undefined);
+  }, []);
+
   const handleProjectReorder = useCallback((nextIds: string[]) => {
     setProjectDraftOrderIds(nextIds);
   }, []);
@@ -2216,6 +2553,48 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
   const resetProjectOrderDraft = useCallback(() => {
     setProjectDraftOrderIds(null);
   }, []);
+
+  const saveExperienceLayout = useCallback(async () => {
+    if (!hasExperienceChanges) {
+      return;
+    }
+
+    setIsSavingExperienceLayout(true);
+    try {
+      const payload: ReorderItem[] = effectiveExperienceItems.map((item, index) => ({
+        id: asId(item._id),
+        order: index + 1,
+      }));
+
+      const result = await reorderExperiences({
+        items: payload.map((item) => ({ id: item.id as Id<'experiences'>, order: item.order })),
+        currentExperienceId: effectiveCurrentExperienceId
+          ? (effectiveCurrentExperienceId as Id<'experiences'>)
+          : null,
+      });
+
+      setExperienceDraftOrderIds(null);
+      setExperienceDraftCurrentRoleId(undefined);
+      toast({
+        title: 'Experience layout saved',
+        description: `Updated ${result.updatedCount} experiences.`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Unable to save experience layout',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingExperienceLayout(false);
+    }
+  }, [
+    effectiveCurrentExperienceId,
+    effectiveExperienceItems,
+    hasExperienceChanges,
+    reorderExperiences,
+    toast,
+  ]);
 
   const saveProjectOrder = useCallback(async () => {
     if (!hasProjectOrderChanges || !projectDraftOrderIds) {
@@ -2353,6 +2732,38 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
             onEdit={openEdit}
             onDelete={openDelete}
             onReorder={handleProjectReorder}
+          />
+        </div>
+      )
+    ) : activeEntityConfig.id === 'experiences' ? (
+      displayItems.length === 0 ? (
+        <EmptyState
+          title={activeEntityConfig.emptyTitle}
+          description={activeEntityConfig.emptyDescription}
+          onCreate={openCreate}
+        />
+      ) : (
+        <div className="space-y-4">
+          <ExperienceLayoutToolbar
+            hasChanges={hasExperienceChanges}
+            isSaving={isSavingExperienceLayout}
+            currentRoleId={effectiveCurrentExperienceId}
+            currentRoleOptions={experienceCurrentRoleOptions}
+            onCurrentRoleChange={handleExperienceCurrentRoleChange}
+            onReset={resetExperienceLayoutDraft}
+            onSave={() => {
+              void saveExperienceLayout();
+            }}
+          />
+
+          <SortableExperienceGrid
+            items={displayItems}
+            selectedItemId={selectedItemId}
+            context={lookupContext}
+            onOpen={openView}
+            onEdit={openEdit}
+            onDelete={openDelete}
+            onReorder={handleExperienceReorder}
           />
         </div>
       )

@@ -18,6 +18,7 @@ export type ExperiencePayload = {
   description: string;
   technologies: string[];
   logo?: string;
+  isCurrent?: boolean;
   order: number;
 };
 
@@ -120,6 +121,7 @@ export const mapExperience = (item: ExperiencePayload): Experience => ({
   description: item.description,
   technologies: item.technologies || [],
   logo: item.logo,
+  isCurrent: item.isCurrent,
   order: item.order ?? 0,
 });
 

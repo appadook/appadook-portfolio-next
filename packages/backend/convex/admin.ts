@@ -9,6 +9,7 @@ const experienceFields = {
   description: v.string(),
   technologies: v.array(v.string()),
   logo: v.optional(v.string()),
+  isCurrent: v.optional(v.boolean()),
   order: v.number(),
 };
 
@@ -279,6 +280,85 @@ export const reorderProjects = mutation({
     }
 
     return { updatedCount: payload.length, updatedAt: now };
+  },
+});
+
+export const reorderExperiences = mutation({
+  args: {
+    items: v.array(
+      v.object({
+        id: v.id('experiences'),
+        order: v.number(),
+      }),
+    ),
+    currentExperienceId: v.union(v.id('experiences'), v.null()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const payload = args.items;
+
+    if (payload.length === 0) {
+      const existingExperiences = await ctx.db.query('experiences').take(1);
+      if (existingExperiences.length > 0) {
+        throw new Error('Reorder payload must include all existing experiences.');
+      }
+      return { updatedCount: 0, updatedAt: now, currentExperienceId: null };
+    }
+
+    const ids = new Set<string>();
+    const orders = new Set<number>();
+
+    for (const item of payload) {
+      if (ids.has(item.id)) {
+        throw new Error(`Duplicate experience id in reorder payload: ${item.id}`);
+      }
+      ids.add(item.id);
+
+      if (!Number.isInteger(item.order) || item.order < 1) {
+        throw new Error(`Invalid experience order in reorder payload: ${item.order}`);
+      }
+      if (orders.has(item.order)) {
+        throw new Error(`Duplicate experience order in reorder payload: ${item.order}`);
+      }
+      orders.add(item.order);
+    }
+
+    const existingExperiences = await ctx.db.query('experiences').collect();
+    if (existingExperiences.length !== payload.length) {
+      throw new Error('Reorder payload must include every experience exactly once.');
+    }
+
+    const existingIds = new Set(existingExperiences.map((experience) => experience._id));
+    for (const item of payload) {
+      if (!existingIds.has(item.id)) {
+        throw new Error(`Unknown experience id in reorder payload: ${item.id}`);
+      }
+    }
+
+    if (args.currentExperienceId !== null && !existingIds.has(args.currentExperienceId)) {
+      throw new Error(`Unknown experience id for current role: ${args.currentExperienceId}`);
+    }
+
+    const sortedOrders = [...orders].sort((a, b) => a - b);
+    for (let index = 0; index < sortedOrders.length; index += 1) {
+      const expected = index + 1;
+      if (sortedOrders[index] !== expected) {
+        throw new Error('Experience orders must be contiguous integers starting at 1.');
+      }
+    }
+
+    for (const item of payload) {
+      await ctx.db.patch(item.id, {
+        order: item.order,
+        isCurrent: args.currentExperienceId === item.id,
+      });
+    }
+
+    return {
+      updatedCount: payload.length,
+      updatedAt: now,
+      currentExperienceId: args.currentExperienceId,
+    };
   },
 });
 

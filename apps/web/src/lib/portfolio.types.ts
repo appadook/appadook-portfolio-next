@@ -7,6 +7,7 @@ export interface Experience {
   description: string;
   technologies: string[];
   logo?: string;
+  isCurrent?: boolean;
   order: number;
 }
 

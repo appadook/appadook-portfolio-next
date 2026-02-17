@@ -149,7 +149,7 @@ function EditorialCard({ group, index, isLast }: { group: ExperienceGroup; index
 
           {/* Roles */}
           <div className="space-y-3">
-            {group.experiences.map((exp, i) => {
+            {group.experiences.map((exp) => {
               const isOpen = openId === exp._id;
               return (
                 <div key={exp._id} className="group/role">
@@ -169,7 +169,7 @@ function EditorialCard({ group, index, isLast }: { group: ExperienceGroup; index
                           }`}>
                             {exp.role}
                           </h4>
-                          {i === 0 && group.experiences.length > 1 && (
+                          {Boolean(exp.isCurrent) && (
                             <span className="text-[10px] font-mono text-primary/70 bg-primary/[0.08] px-2 py-0.5 rounded-full">
                               Current
                             </span>

@@ -20,6 +20,7 @@ export default defineSchema({
     description: v.string(),
     technologies: v.array(v.string()),
     logo: v.optional(v.string()),
+    isCurrent: v.optional(v.boolean()),
     order: v.number(),
   }).index('by_order', ['order']),
 
