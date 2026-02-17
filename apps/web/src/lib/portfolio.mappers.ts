@@ -57,6 +57,7 @@ export type TechnologyPayload = {
   category: string;
   description?: string;
   iconName?: string;
+  iconUrl?: string;
   order: number;
 };
 
@@ -77,6 +78,8 @@ export type CertificatePayload = {
 export type CloudProviderPayload = {
   _id: string;
   name: string;
+  iconName?: string;
+  iconUrl?: string;
   order: number;
   certificates: CertificatePayload[];
 };
@@ -162,12 +165,15 @@ export const mapTechnology = (item: TechnologyPayload): Technology => ({
   category: item.category,
   description: item.description,
   iconName: item.iconName,
+  iconUrl: item.iconUrl,
   order: item.order ?? 0,
 });
 
 export const mapCloudProvider = (item: CloudProviderPayload): CloudProvider => ({
   _id: String(item._id),
   name: item.name,
+  iconName: item.iconName,
+  iconUrl: item.iconUrl,
   order: item.order ?? 0,
   certificates: (item.certificates || []).map((certificate) => ({
     _id: String(certificate._id),

@@ -38,6 +38,7 @@ const Navigation = ({ siteSettings }: NavigationProps) => {
     { href: '#about', label: 'About' },
     { href: '#projects', label: 'Work' },
     { href: '#experience', label: 'Experience' },
+    { href: '#skills', label: 'Technology' },
     { href: '#contact', label: 'Contact' },
   ];
 

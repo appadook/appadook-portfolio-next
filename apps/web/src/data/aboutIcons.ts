@@ -41,12 +41,3 @@ export const getAboutIcon = (iconName: string): React.ElementType => {
   return aboutIconMap[iconName] || Circle;
 };
 
-/**
- * Render an icon with consistent sizing
- * @param iconName - The name of the icon
- * @param className - Additional CSS classes (default: "w-6 h-6")
- */
-export const renderAboutIcon = (iconName: string, className: string = "w-6 h-6"): React.ReactElement => {
-  const IconComponent = getAboutIcon(iconName);
-  return React.createElement(IconComponent, { className });
-};

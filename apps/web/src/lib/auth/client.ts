@@ -4,11 +4,6 @@ import { createWayAuthClient, getWayAuthErrorMessage } from '@way/auth-sdk';
 import { WAY_AUTH_ACCESS_TOKEN_COOKIE } from '@/lib/auth/constants';
 import { getWayAuthBaseUrl } from '@/lib/auth/config';
 
-export type AuthUser = {
-  id: string;
-  email: string;
-};
-
 const wayAuthClient = createWayAuthClient({
   baseUrl: getWayAuthBaseUrl(),
   credentials: 'include',

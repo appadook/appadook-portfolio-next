@@ -25,6 +25,8 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
   AlertTriangle,
+  ChevronDown,
+  ChevronUp,
   FileText,
   GripVertical,
   Image as ImageIcon,
@@ -35,6 +37,7 @@ import {
   RotateCcw,
   Save,
   Trash2,
+  Search,
   Upload,
   X,
 } from 'lucide-react';
@@ -54,6 +57,7 @@ import {
   DrawerTitle,
 } from '@/components/ui/drawer';
 import { Progress } from '@/components/ui/progress';
+import { iconRegistryEntries, getRegistryIcon } from '@/data/iconRegistry';
 
 type AdminUser = {
   id: string;
@@ -110,6 +114,19 @@ type DraftOrder = string[] | null;
 type ProjectDraftOrder = DraftOrder;
 type ExperienceDraftOrder = DraftOrder;
 
+type TechDraftItem = {
+  _id: string;
+  name: string;
+  category: string;
+  description: string;
+  iconName: string;
+  iconUrl: string;
+  order: number;
+  _isNew?: boolean;
+  _isDeleted?: boolean;
+  _isExpanded?: boolean;
+};
+
 type UploadFieldKind = 'image' | 'logo' | 'resumePdf';
 
 type UploadValidationRule = {
@@ -129,7 +146,7 @@ type SelectOption = {
   value: string;
 };
 
-type FieldType = 'text' | 'textarea' | 'number' | 'csv' | 'list' | 'select';
+type FieldType = 'text' | 'textarea' | 'number' | 'csv' | 'list' | 'select' | 'icon-picker';
 
 type FormFieldConfig = {
   key: string;
@@ -697,6 +714,121 @@ function MediaUploadField({
   );
 }
 
+type IconPickerFieldProps = {
+  label: string;
+  value: string;
+  required?: boolean;
+  onChange: (nextValue: string) => void;
+};
+
+function IconPickerField({ label, value, required, onChange }: IconPickerFieldProps) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return iconRegistryEntries;
+    const q = search.toLowerCase();
+    return iconRegistryEntries.filter((entry) => entry.key.toLowerCase().includes(q));
+  }, [search]);
+
+  const SelectedIcon = getRegistryIcon(value);
+
+  return (
+    <div className="space-y-2">
+      <span className="mb-2 block text-xs font-mono text-muted-foreground uppercase tracking-wider">
+        {label}
+        {required ? ' *' : ''}
+      </span>
+
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => { setOpen(true); setSearch(''); }}
+          className="flex items-center gap-2 rounded-lg border border-border/60 bg-background-subtle/30 px-3 py-2 text-sm hover:border-primary/40 transition-colors"
+        >
+          {SelectedIcon ? (
+            <>
+              <SelectedIcon className="h-5 w-5 text-primary" />
+              <span className="font-mono text-xs">{value}</span>
+            </>
+          ) : (
+            <span className="text-muted-foreground">Select icon…</span>
+          )}
+        </button>
+
+        {value && (
+          <button
+            type="button"
+            className="text-xs text-destructive hover:underline"
+            onClick={() => onChange('')}
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" onClick={() => setOpen(false)}>
+          <div
+            className="mx-4 w-full max-w-lg rounded-2xl border border-border bg-background shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
+              <Search className="h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search icons…"
+                className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/50"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                autoFocus
+              />
+              <span className="text-xs text-muted-foreground tabular-nums">{filtered.length} icons</span>
+              <button type="button" onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-6 gap-1 p-3 max-h-[50vh] overflow-y-auto">
+              {filtered.map((entry) => {
+                const Icon = entry.icon;
+                const isActive = entry.key === value;
+                return (
+                  <button
+                    key={entry.key}
+                    type="button"
+                    title={entry.key}
+                    onClick={() => {
+                      onChange(entry.key);
+                      setOpen(false);
+                    }}
+                    className={cn(
+                      'flex flex-col items-center justify-center gap-1 rounded-lg p-2 transition-colors',
+                      isActive
+                        ? 'bg-primary/15 border border-primary/30'
+                        : 'hover:bg-primary/[0.06] border border-transparent',
+                    )}
+                  >
+                    <Icon className="h-5 w-5 text-foreground" />
+                    <span className="text-[8px] leading-tight text-muted-foreground truncate w-full text-center">
+                      {entry.key.replace(/^(Si|Fa)/, '')}
+                    </span>
+                  </button>
+                );
+              })}
+              {filtered.length === 0 && (
+                <p className="col-span-6 py-8 text-center text-sm text-muted-foreground">
+                  No icons match &ldquo;{search}&rdquo;
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 type EmptyStateProps = {
   title: string;
   description: string;
@@ -1013,6 +1145,173 @@ function ExperienceLayoutToolbar({
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+type TechBatchToolbarProps = {
+  hasChanges: boolean;
+  isSaving: boolean;
+  onAdd: () => void;
+  onSave: () => void;
+  onCancel: () => void;
+};
+
+function TechBatchToolbar({ hasChanges, isSaving, onAdd, onSave, onCancel }: TechBatchToolbarProps) {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-background-subtle/30 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-foreground">Technologies</p>
+          <p className="text-xs text-muted-foreground">
+            Edit inline, add or remove items, then save all changes at once.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {hasChanges ? <Badge variant="outline">Unsaved changes</Badge> : null}
+          <Button type="button" variant="outline" size="sm" onClick={onAdd} disabled={isSaving}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Technology
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={isSaving || !hasChanges}>
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Cancel
+          </Button>
+          <Button type="button" size="sm" onClick={onSave} disabled={isSaving || !hasChanges}>
+            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            {isSaving ? 'Saving...' : 'Save All'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type TechEditableCardProps = {
+  item: TechDraftItem;
+  onFieldChange: (id: string, field: keyof TechDraftItem, value: string | number) => void;
+  onToggleExpand: (id: string) => void;
+  onDelete: (id: string) => void;
+  generateUploadUrl: () => Promise<string>;
+  resolveStorageUrl: (args: { storageId: Id<'_storage'> }) => Promise<string | null>;
+};
+
+function TechEditableCard({
+  item,
+  onFieldChange,
+  onToggleExpand,
+  onDelete,
+  generateUploadUrl,
+  resolveStorageUrl,
+}: TechEditableCardProps) {
+  const SelectedIcon = getRegistryIcon(item.iconName);
+
+  if (item._isExpanded) {
+    return (
+      <div className="rounded-2xl border border-primary/40 bg-background-subtle/50 p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {item._isNew ? (
+              <Badge variant="outline" className="text-xs">New</Badge>
+            ) : null}
+            <span className="font-display text-sm text-foreground">{item.name || 'New Technology'}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button type="button" variant="ghost" size="sm" onClick={() => onDelete(item._id)}>
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => onToggleExpand(item._id)}>
+              <ChevronUp className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className="space-y-1">
+            <span className="block text-xs font-mono uppercase tracking-wider text-muted-foreground">Name *</span>
+            <input
+              type="text"
+              className="w-full rounded-lg border border-border/60 bg-background-subtle/30 px-3 py-2 text-sm"
+              value={item.name}
+              onChange={(e) => onFieldChange(item._id, 'name', e.target.value)}
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="block text-xs font-mono uppercase tracking-wider text-muted-foreground">Category *</span>
+            <select
+              className="w-full rounded-lg border border-border/60 bg-background-subtle/30 px-3 py-2 text-sm"
+              value={item.category}
+              onChange={(e) => onFieldChange(item._id, 'category', e.target.value)}
+            >
+              <option value="">Select category</option>
+              {TECHNOLOGY_CATEGORY_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <label className="block space-y-1">
+          <span className="block text-xs font-mono uppercase tracking-wider text-muted-foreground">Description</span>
+          <textarea
+            className="w-full rounded-lg border border-border/60 bg-background-subtle/30 px-3 py-2 text-sm"
+            rows={2}
+            value={item.description}
+            onChange={(e) => onFieldChange(item._id, 'description', e.target.value)}
+          />
+        </label>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <IconPickerField
+            label="Icon"
+            value={item.iconName}
+            onChange={(v) => onFieldChange(item._id, 'iconName', v)}
+          />
+          <label className="space-y-1">
+            <span className="block text-xs font-mono uppercase tracking-wider text-muted-foreground">Display Order *</span>
+            <input
+              type="number"
+              className="w-full rounded-lg border border-border/60 bg-background-subtle/30 px-3 py-2 text-sm"
+              value={item.order}
+              onChange={(e) => onFieldChange(item._id, 'order', Number(e.target.value) || 0)}
+            />
+          </label>
+        </div>
+
+        <MediaUploadField
+          id={`tech-icon-${item._id}`}
+          label="Custom Icon Image"
+          kind="logo"
+          value={item.iconUrl}
+          onChange={(url) => onFieldChange(item._id, 'iconUrl', url)}
+          generateUploadUrl={generateUploadUrl}
+          resolveStorageUrl={resolveStorageUrl}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="group flex items-center gap-3 rounded-2xl border border-border/60 bg-background-subtle/30 p-3 transition-all hover:border-primary/30">
+      <button
+        type="button"
+        className="flex flex-1 items-center gap-3 text-left"
+        onClick={() => onToggleExpand(item._id)}
+      >
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/40 bg-background text-foreground">
+          {SelectedIcon ? <SelectedIcon className="h-5 w-5" /> : <span className="text-xs font-mono">{item.order}</span>}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-foreground">{item.name || 'Untitled'}</p>
+          <p className="truncate text-xs text-muted-foreground">{item.category || 'No category'}</p>
+        </div>
+        {item._isNew ? <Badge variant="outline" className="text-xs">New</Badge> : null}
+        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+      </button>
+      <Button type="button" variant="ghost" size="sm" onClick={() => onDelete(item._id)}>
+        <Trash2 className="h-4 w-4 text-destructive/60 group-hover:text-destructive" />
+      </Button>
     </div>
   );
 }
@@ -1468,6 +1767,15 @@ function EntityInspector({
 
         <div className="grid gap-3">
           {config.fields.map((field) => (
+            field.type === 'icon-picker' ? (
+              <IconPickerField
+                key={field.key}
+                label={field.label}
+                value={form[field.key] ?? ''}
+                required={field.required}
+                onChange={(nextValue) => setForm((current) => ({ ...current, [field.key]: nextValue }))}
+              />
+            ) : (
             <label key={field.key}>
               <span className="mb-2 block text-xs font-mono text-muted-foreground uppercase tracking-wider">
                 {field.label}
@@ -1506,6 +1814,7 @@ function EntityInspector({
                 />
               )}
             </label>
+            )
           ))}
 
           {config.mediaFields.map((mediaField) => (
@@ -2046,6 +2355,9 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
   const [isSavingExperienceLayout, setIsSavingExperienceLayout] = useState(false);
   const [projectDraftOrderIds, setProjectDraftOrderIds] = useState<ProjectDraftOrder>(null);
   const [isSavingProjectOrder, setIsSavingProjectOrder] = useState(false);
+  const [techDraftItems, setTechDraftItems] = useState<TechDraftItem[] | null>(null);
+  const [isSavingTechBatch, setIsSavingTechBatch] = useState(false);
+  const batchSaveTechnologies = useMutation(api.admin.batchSaveTechnologies);
 
   useEffect(() => {
     setSelectedItemId(null);
@@ -2204,6 +2516,188 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
     return ordered;
   }, [projectDraftOrderIds, projectsById, sortedProjects]);
 
+  const sortedTechnologies = useMemo(() => sortByOrder(data.technologies), [data.technologies]);
+
+  const canonicalTechItems = useMemo<TechDraftItem[]>(
+    () =>
+      sortedTechnologies.map((item) => ({
+        _id: asId(item._id),
+        name: asText(item.name),
+        category: asText(item.category),
+        description: asText(item.description),
+        iconName: asText(item.iconName),
+        iconUrl: asText(item.iconUrl),
+        order: Number(item.order ?? 0),
+      })),
+    [sortedTechnologies],
+  );
+
+  const effectiveTechItems = useMemo(
+    () => (techDraftItems ?? canonicalTechItems).filter((item) => !item._isDeleted),
+    [techDraftItems, canonicalTechItems],
+  );
+
+  const hasTechChanges = useMemo(() => {
+    if (!techDraftItems) return false;
+    const canonical = canonicalTechItems;
+    const draft = techDraftItems;
+    if (draft.some((item) => item._isNew || item._isDeleted)) return true;
+    const canonicalMap = new Map(canonical.map((item) => [item._id, item]));
+    for (const item of draft) {
+      if (item._isNew || item._isDeleted) continue;
+      const orig = canonicalMap.get(item._id);
+      if (!orig) return true;
+      if (
+        item.name !== orig.name ||
+        item.category !== orig.category ||
+        item.description !== orig.description ||
+        item.iconName !== orig.iconName ||
+        item.iconUrl !== orig.iconUrl ||
+        item.order !== orig.order
+      )
+        return true;
+    }
+    return false;
+  }, [techDraftItems, canonicalTechItems]);
+
+  const ensureTechDraft = useCallback(() => {
+    setTechDraftItems((current) => current ?? canonicalTechItems.map((item) => ({ ...item })));
+  }, [canonicalTechItems]);
+
+  const updateTechField = useCallback(
+    (itemId: string, field: keyof TechDraftItem, value: string | number) => {
+      ensureTechDraft();
+      setTechDraftItems((prev) => {
+        if (!prev) return prev;
+        return prev.map((item) => (item._id === itemId ? { ...item, [field]: value } : item));
+      });
+    },
+    [ensureTechDraft],
+  );
+
+  const toggleTechExpand = useCallback(
+    (itemId: string) => {
+      ensureTechDraft();
+      setTechDraftItems((prev) => {
+        if (!prev) return prev;
+        return prev.map((item) =>
+          item._id === itemId ? { ...item, _isExpanded: !item._isExpanded } : item,
+        );
+      });
+    },
+    [ensureTechDraft],
+  );
+
+  const addTechDraftItem = useCallback(() => {
+    ensureTechDraft();
+    setTechDraftItems((prev) => {
+      const items = prev ?? [];
+      const maxOrder = items.reduce((max, item) => Math.max(max, item.order), 0);
+      return [
+        ...items,
+        {
+          _id: `temp-${crypto.randomUUID()}`,
+          name: '',
+          category: '',
+          description: '',
+          iconName: '',
+          iconUrl: '',
+          order: maxOrder + 1,
+          _isNew: true,
+          _isExpanded: true,
+        },
+      ];
+    });
+  }, [ensureTechDraft]);
+
+  const deleteTechDraftItem = useCallback(
+    (itemId: string) => {
+      ensureTechDraft();
+      setTechDraftItems((prev) => {
+        if (!prev) return prev;
+        if (itemId.startsWith('temp-')) {
+          return prev.filter((item) => item._id !== itemId);
+        }
+        return prev.map((item) => (item._id === itemId ? { ...item, _isDeleted: true } : item));
+      });
+    },
+    [ensureTechDraft],
+  );
+
+  const resetTechDraft = useCallback(() => {
+    setTechDraftItems(null);
+  }, []);
+
+  const saveTechBatch = useCallback(async () => {
+    if (!techDraftItems || !hasTechChanges) return;
+
+    const nonDeleted = techDraftItems.filter((item) => !item._isDeleted);
+    for (const item of nonDeleted) {
+      if (!item.name.trim()) {
+        toast({ title: 'Validation error', description: 'All technologies must have a name.', variant: 'destructive' });
+        return;
+      }
+      if (!item.category.trim()) {
+        toast({ title: 'Validation error', description: `"${item.name}" needs a category.`, variant: 'destructive' });
+        return;
+      }
+    }
+
+    const canonicalMap = new Map(canonicalTechItems.map((item) => [item._id, item]));
+
+    const creates = techDraftItems
+      .filter((item) => item._isNew && !item._isDeleted)
+      .map((item) => ({
+        name: item.name.trim(),
+        category: item.category,
+        description: item.description.trim() || undefined,
+        iconName: item.iconName || undefined,
+        iconUrl: item.iconUrl || undefined,
+        order: item.order,
+      }));
+
+    const updates = techDraftItems
+      .filter((item) => !item._isNew && !item._isDeleted && canonicalMap.has(item._id))
+      .filter((item) => {
+        const orig = canonicalMap.get(item._id)!;
+        return (
+          item.name !== orig.name ||
+          item.category !== orig.category ||
+          item.description !== orig.description ||
+          item.iconName !== orig.iconName ||
+          item.iconUrl !== orig.iconUrl ||
+          item.order !== orig.order
+        );
+      })
+      .map((item) => ({
+        id: item._id as Id<'technologies'>,
+        name: item.name.trim(),
+        category: item.category,
+        description: item.description.trim() || undefined,
+        iconName: item.iconName || undefined,
+        iconUrl: item.iconUrl || undefined,
+        order: item.order,
+      }));
+
+    const deletes = techDraftItems
+      .filter((item) => item._isDeleted && !item._isNew)
+      .map((item) => item._id as Id<'technologies'>);
+
+    setIsSavingTechBatch(true);
+    try {
+      const result = await batchSaveTechnologies({ creates, updates, deletes });
+      toast({
+        title: 'Technologies saved',
+        description: `Created ${result.createdCount}, updated ${result.updatedCount}, deleted ${result.deletedCount}.`,
+      });
+      setTechDraftItems(null);
+    } catch (err) {
+      toast({ title: 'Save failed', description: String(err), variant: 'destructive' });
+    } finally {
+      setIsSavingTechBatch(false);
+    }
+  }, [techDraftItems, hasTechChanges, canonicalTechItems, batchSaveTechnologies, toast]);
+
   const aboutCategoryMap = useMemo(
     () => new Map((data.aboutCategories ?? []).map((category) => [asId(category._id), category])),
     [data.aboutCategories],
@@ -2348,10 +2842,10 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
           { key: 'name', label: 'Name', type: 'text', required: true },
           { key: 'category', label: 'Category', type: 'select', required: true, options: TECHNOLOGY_CATEGORY_OPTIONS },
           { key: 'description', label: 'Description', type: 'textarea' },
-          { key: 'iconName', label: 'Icon Name', type: 'text' },
+          { key: 'iconName', label: 'Icon', type: 'icon-picker' },
           { key: 'order', label: 'Display Order', type: 'number', required: true },
         ],
-        mediaFields: [],
+        mediaFields: [{ key: 'iconUrl', label: 'Custom Icon Image', kind: 'logo' as const }],
       },
       providers: {
         id: 'providers',
@@ -2365,9 +2859,10 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
         deleteMutation: api.admin.deleteCloudProvider,
         fields: [
           { key: 'name', label: 'Provider Name', type: 'text', required: true },
+          { key: 'iconName', label: 'Icon', type: 'icon-picker' },
           { key: 'order', label: 'Display Order', type: 'number', required: true },
         ],
-        mediaFields: [],
+        mediaFields: [{ key: 'iconUrl', label: 'Custom Icon Image', kind: 'logo' as const }],
       },
       certificates: {
         id: 'certificates',
@@ -2466,8 +2961,10 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
         ? effectiveProjectItems
         : activeSectionId === 'experiences'
           ? effectiveExperienceItems
-          : sortedItems,
-    [activeSectionId, effectiveExperienceItems, effectiveProjectItems, sortedItems],
+          : activeSectionId === 'technologies'
+            ? effectiveTechItems as unknown as AdminEntity[]
+            : sortedItems,
+    [activeSectionId, effectiveExperienceItems, effectiveProjectItems, effectiveTechItems, sortedItems],
   );
 
   const selectedItem = useMemo(
@@ -2652,7 +3149,8 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
         generateUploadUrl={generateUploadUrl}
         resolveStorageUrl={resolveStorageUrl}
       />
-    ) : activeEntityConfig ? (
+    ) : activeSectionId === 'technologies' ? null
+    : activeEntityConfig ? (
       <EntityInspector
         config={activeEntityConfig}
         selectedItem={selectedItem}
@@ -2767,6 +3265,37 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
           />
         </div>
       )
+    ) : activeEntityConfig.id === 'technologies' ? (
+      <div className="space-y-4">
+        <TechBatchToolbar
+          hasChanges={hasTechChanges}
+          isSaving={isSavingTechBatch}
+          onAdd={addTechDraftItem}
+          onSave={() => { void saveTechBatch(); }}
+          onCancel={resetTechDraft}
+        />
+        {effectiveTechItems.length === 0 ? (
+          <EmptyState
+            title={activeEntityConfig.emptyTitle}
+            description={activeEntityConfig.emptyDescription}
+            onCreate={addTechDraftItem}
+          />
+        ) : (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {effectiveTechItems.map((item) => (
+              <TechEditableCard
+                key={item._id}
+                item={item}
+                onFieldChange={updateTechField}
+                onToggleExpand={toggleTechExpand}
+                onDelete={deleteTechDraftItem}
+                generateUploadUrl={generateUploadUrl}
+                resolveStorageUrl={resolveStorageUrl}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     ) : (
       <SectionCardGrid
         config={activeEntityConfig}
@@ -2787,7 +3316,13 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
         user={user}
         tabs={tabs}
         activeSectionId={activeSectionId}
-        onSectionChange={setActiveSectionId}
+        onSectionChange={(nextId) => {
+          if (hasTechChanges) {
+            if (!window.confirm('You have unsaved technology changes. Discard them?')) return;
+            resetTechDraft();
+          }
+          setActiveSectionId(nextId);
+        }}
         sectionTitle={sectionTitle}
         sectionDescription={sectionDescription}
         onCreateOrEditSettings={() => {
@@ -2797,12 +3332,12 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
             setMobileInspectorOpen(true);
           }
         }}
-        onCreateItem={openCreate}
+        onCreateItem={activeSectionId === 'technologies' ? addTechDraftItem : openCreate}
         isSiteSettingsSection={isSiteSettingsSection}
         hasSiteSettings={Boolean(data.siteSettings)}
         cardList={cardList}
         inspector={inspectorBody}
-        inspectorOpen={desktopInspectorOpen}
+        inspectorOpen={activeSectionId === 'technologies' ? false : desktopInspectorOpen}
       />
 
       <ItemInspectorDrawer

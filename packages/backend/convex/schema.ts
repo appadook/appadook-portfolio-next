@@ -57,11 +57,14 @@ export default defineSchema({
     category: v.string(),
     description: v.optional(v.string()),
     iconName: v.optional(v.string()),
+    iconUrl: v.optional(v.string()),
     order: v.number(),
   }).index('by_category_order', ['category', 'order']),
 
   cloudProviders: defineTable({
     name: v.string(),
+    iconName: v.optional(v.string()),
+    iconUrl: v.optional(v.string()),
     order: v.number(),
   }).index('by_order', ['order']),
 

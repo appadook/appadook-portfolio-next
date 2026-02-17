@@ -1,12 +1,5 @@
 import React from 'react';
-import { 
-  Monitor,
-  Server, 
-  Database, 
-  Smartphone, 
-  Settings, 
-  TestTube
-} from 'lucide-react';
+import { TestTube } from 'lucide-react';
 import {
   SiReact,
   SiNextdotjs,
@@ -38,16 +31,6 @@ import {
   SiRedis
 } from 'react-icons/si';
 import { FaJava, FaMicrosoft } from 'react-icons/fa';
-
-// Icon mappings for categories
-export const categoryIcons: { [key: string]: React.ElementType } = {
-  "Frontend": Monitor,
-  "Backend": Server,
-  "Database": Database,
-  "Mobile": Smartphone,
-  "Testing & QA": TestTube,
-  "DevOps": Settings,
-};
 
 // Icon mappings for technologies
 export const technologyIcons: { [key: string]: React.ElementType } = {
@@ -102,9 +85,3 @@ export const cloudProviderIcons: { [key: string]: React.ElementType } = {
   "Apache": SiApache,
 };
 
-// Floating animation icons for the bottom section
-export const floatingAnimationIcons = [
-  SiReact, SiPython, SiNodedotjs, SiPostgresql, SiGooglecloud, SiDocker, 
-  SiTypescript, SiJavascript, SiNextdotjs, SiFlask, SiMysql, SiGit,
-  SiReact, SiPython, SiNodedotjs, SiPostgresql, SiGooglecloud, SiDocker
-];

@@ -46,11 +46,14 @@ const technologyFields = {
   category: v.string(),
   description: v.optional(v.string()),
   iconName: v.optional(v.string()),
+  iconUrl: v.optional(v.string()),
   order: v.number(),
 };
 
 const cloudProviderFields = {
   name: v.string(),
+  iconName: v.optional(v.string()),
+  iconUrl: v.optional(v.string()),
   order: v.number(),
 };
 
@@ -399,6 +402,30 @@ export const deleteTechnology = mutation({
   args: { id: v.id('technologies') },
   handler: async (ctx, args) => {
     await ctx.db.delete(args.id);
+  },
+});
+
+export const batchSaveTechnologies = mutation({
+  args: {
+    creates: v.array(v.object(technologyFields)),
+    updates: v.array(v.object({ id: v.id('technologies'), ...technologyFields })),
+    deletes: v.array(v.id('technologies')),
+  },
+  handler: async (ctx, args) => {
+    for (const id of args.deletes) {
+      await ctx.db.delete(id);
+    }
+    for (const { id, ...rest } of args.updates) {
+      await ctx.db.patch(id, rest);
+    }
+    for (const item of args.creates) {
+      await ctx.db.insert('technologies', item);
+    }
+    return {
+      deletedCount: args.deletes.length,
+      updatedCount: args.updates.length,
+      createdCount: args.creates.length,
+    };
   },
 });
 

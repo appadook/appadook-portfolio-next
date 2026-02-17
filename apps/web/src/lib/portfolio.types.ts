@@ -53,6 +53,7 @@ export interface Technology {
     | string;
   description?: string;
   iconName?: string;
+  iconUrl?: string;
   order: number;
 }
 
@@ -73,6 +74,8 @@ export interface Certificate {
 export interface CloudProvider {
   _id: string;
   name: string;
+  iconName?: string;
+  iconUrl?: string;
   order: number;
   certificates?: Certificate[];
 }

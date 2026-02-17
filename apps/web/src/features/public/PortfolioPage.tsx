@@ -8,7 +8,7 @@ import AboutSection from '@/components/AboutSection';
 import ProjectsSection from '@/components/ProjectsSection';
 import ExperienceSection from '@/components/ExperienceSection';
 import SkillsSection from '@/components/SkillsSection';
-import TechnologiesSectionV2 from '@/components/TechnologiesSectionV2';
+import TechnologiesSectionNew from '@/components/TechnologiesSectionNew';
 import ContactSection from '@/components/ContactSection';
 import AnimatedSection from '@/components/AnimatedSection';
 import type { PortfolioSnapshot } from '@/lib/portfolio.types';
@@ -18,7 +18,6 @@ const BackgroundSpline = dynamic(() => import('@/components/BackgroundSpline'), 
 });
 
 const PortfolioPage = ({ snapshot }: { snapshot: PortfolioSnapshot }) => {
-
   return (
     <motion.div
       className="min-h-screen bg-background relative"
@@ -40,7 +39,7 @@ const PortfolioPage = ({ snapshot }: { snapshot: PortfolioSnapshot }) => {
           siteSettings={snapshot.siteSettings}
         />
         <SkillsSection programmingLanguages={snapshot.programmingLanguages} />
-        <TechnologiesSectionV2
+        <TechnologiesSectionNew
           technologies={snapshot.technologies}
           cloudProviders={snapshot.cloudProviders}
         />

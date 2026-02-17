@@ -11,8 +11,6 @@ const BREAKPOINTS = {
 
 type Breakpoint = 'mobile' | 'sm' | 'md' | 'lg' | 'xl' | '2xl'
 
-const MOBILE_BREAKPOINT = BREAKPOINTS.md // 768px
-
 /**
  * Helper to determine breakpoint from width
  */
@@ -23,26 +21,6 @@ const getBreakpointFromWidth = (width: number): Breakpoint => {
   if (width < BREAKPOINTS.xl) return 'lg'
   if (width < BREAKPOINTS['2xl']) return 'xl'
   return '2xl'
-}
-
-/**
- * Simple hook to check if viewport is mobile (<768px)
- * For backward compatibility
- */
-export function useIsMobile() {
-  const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)
-
-  React.useEffect(() => {
-    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
-    const onChange = () => {
-      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-    }
-    mql.addEventListener("change", onChange)
-    setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-    return () => mql.removeEventListener("change", onChange)
-  }, [])
-
-  return !!isMobile
 }
 
 /**
