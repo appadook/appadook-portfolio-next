@@ -4,7 +4,6 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "next dev",
-    "prebuild": "bun run --cwd ../../packages/way-auth-sdk build",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
@@ -21,7 +20,7 @@
     "@radix-ui/react-toast": "^1.2.1",
     "@radix-ui/react-tooltip": "^1.1.4",
     "@splinetool/viewer": "^1.12.48",
-    "@way/auth-sdk": "workspace:*",
+    "@way/auth-sdk": "file:../../../way-my_auth_service/packages/way-auth-sdk",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "convex": "^1.17.4",

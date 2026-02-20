@@ -5,7 +5,7 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { login, signup } from '@/lib/auth/client';
+import { auth } from '@/lib/auth';
 
 type Mode = 'login' | 'signup';
 
@@ -13,7 +13,8 @@ export function AdminAuthForm({ mode }: { mode: Mode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get('next') || '/admin';
-  const safeNextPath: Route = (nextPath.startsWith('/') ? nextPath : '/admin') as Route;
+  const safeNextPath: Route =
+    (nextPath.startsWith('/') && !nextPath.startsWith('//') ? nextPath : '/admin') as Route;
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,15 +30,15 @@ export function AdminAuthForm({ mode }: { mode: Mode }) {
 
     try {
       if (isLogin) {
-        await login(email, password);
+        await auth.client.login({ email, password });
       } else {
-        await signup(email, password);
+        await auth.client.signup({ email, password });
       }
 
       router.push(safeNextPath);
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Authentication failed.');
+      setError(auth.errors.toUiError(err).message);
     } finally {
       setIsSubmitting(false);
     }

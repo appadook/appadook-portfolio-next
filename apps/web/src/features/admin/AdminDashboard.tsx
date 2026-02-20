@@ -43,7 +43,7 @@ import {
 } from 'lucide-react';
 import type { Doc, Id } from '@portfolio/backend/convex/_generated/dataModel';
 import { api } from '@portfolio/backend/convex/_generated/api';
-import { logout as logoutRequest } from '@/lib/auth/client';
+import { auth } from '@/lib/auth';
 import { useBreakpoint } from '@/hooks/use-mobile';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -2268,7 +2268,7 @@ function AdminWorkspaceShell({
             variant="outline"
             className="border-border/60 hover:border-primary/50"
             onClick={async () => {
-              await logoutRequest();
+              await auth.client.logout();
               router.push('/admin/login');
               router.refresh();
             }}
