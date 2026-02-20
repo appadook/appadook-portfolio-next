@@ -10,7 +10,7 @@ This repository has been migrated to a Turborepo monorepo with:
 
 - `apps/web`: Public portfolio site and in-app admin CMS UI.
 - `packages/backend`: App-agnostic Convex schema and function modules.
-- `packages/way-auth-sdk`: Legacy local SDK copy kept in-repo; `apps/web` now consumes the sibling WAY Auth SDK package.
+- `packages/way-auth-sdk`: Internal workspace copy of `@way/auth-sdk` used by the web app.
 
 ## Tech Stack
 
