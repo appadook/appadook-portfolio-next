@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { LogOut, Pencil, Plus } from 'lucide-react';
 import { auth } from '@/lib/auth';
@@ -38,6 +38,7 @@ export function AdminWorkspaceShell({
   inspector,
 }: AdminWorkspaceShellProps) {
   const router = useRouter();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -51,7 +52,13 @@ export function AdminWorkspaceShell({
           <Button
             variant="outline"
             className="border-border/60 hover:border-primary/50"
+            disabled={isLoggingOut}
             onClick={async () => {
+              if (isLoggingOut) {
+                return;
+              }
+
+              setIsLoggingOut(true);
               try {
                 await auth.client.logout();
               } catch (error) {
@@ -59,11 +66,12 @@ export function AdminWorkspaceShell({
               } finally {
                 router.push('/admin/login');
                 router.refresh();
+                setIsLoggingOut(false);
               }
             }}
           >
             <LogOut className="mr-2 h-4 w-4" />
-            Sign out
+            {isLoggingOut ? 'Signing out...' : 'Sign out'}
           </Button>
         </div>
       </header>

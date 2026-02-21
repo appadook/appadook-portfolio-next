@@ -3,11 +3,14 @@
 import { useState } from 'react';
 import type { Route } from 'next';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { auth } from '@/lib/auth';
 
 export type AdminAuthMode = 'login' | 'signup';
 
 function toSafeNextPath(nextPath: string): Route {
+  if (typeof window === 'undefined' || typeof window.location === 'undefined') {
+    return '/admin';
+  }
+
   try {
     const resolved = new URL(nextPath, window.location.href);
     const isHttpProtocol = resolved.protocol === 'http:' || resolved.protocol === 'https:';
@@ -21,10 +24,26 @@ function toSafeNextPath(nextPath: string): Route {
   }
 }
 
-function ensureAccessTokenCookie(token: string, expiresIn?: number) {
-  const maxAge = typeof expiresIn === 'number' && Number.isFinite(expiresIn) && expiresIn > 0 ? Math.floor(expiresIn) : 900;
-  const secureAttribute = window.location.protocol === 'https:' ? '; Secure' : '';
-  document.cookie = `way_access_token=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAge}; SameSite=Lax${secureAttribute}`;
+type SessionAuthResponse = {
+  error?: {
+    message?: string;
+  };
+};
+
+async function submitSessionCredentials(mode: AdminAuthMode, email: string, password: string): Promise<void> {
+  const response = await fetch('/api/auth/session', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify({ mode, email, password }),
+  });
+
+  const payload = (await response.json().catch(() => null)) as SessionAuthResponse | null;
+  if (!response.ok) {
+    throw new Error(payload?.error?.message ?? 'Authentication failed. Please try again.');
+  }
 }
 
 export function useAdminAuthForm(mode: AdminAuthMode) {
@@ -45,24 +64,11 @@ export function useAdminAuthForm(mode: AdminAuthMode) {
     setIsSubmitting(true);
 
     try {
-      const result =
-        mode === 'login'
-          ? await auth.client.login({ email, password })
-          : await auth.client.signup({ email, password });
-
-      if (!result.accessToken || typeof result.accessToken !== 'string') {
-        throw new Error('Authentication succeeded without an access token.');
-      }
-
-      ensureAccessTokenCookie(result.accessToken, result.expiresIn);
-      if (!document.cookie.includes('way_access_token=')) {
-        throw new Error('Unable to persist admin session cookie in browser.');
-      }
-
+      await submitSessionCredentials(mode, email, password);
       router.refresh();
       router.push(safeNextPath);
     } catch (err) {
-      setError(auth.errors.toUiError(err).message);
+      setError(err instanceof Error ? err.message : 'Authentication failed. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

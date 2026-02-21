@@ -47,7 +47,7 @@ import {
 } from '@/features/admin/config/sectionConfigs';
 import { asId, asStringList, asText } from '@/features/admin/lib/normalizers';
 import { areSameIdOrder, getNextOrder, reconcileDraftOrder, sortByOrder } from '@/features/admin/lib/ordering';
-import { uploadAssetWithSignedUrl } from '@/features/admin/api/uploadTransport';
+import { uploadAssetWithSignedUrl, type UploadedStorageAsset } from '@/features/admin/api/uploadTransport';
 import { useAdminDashboardController } from '@/features/admin/hooks/useAdminDashboardController';
 import { AdminWorkspaceShell } from '@/features/admin/components/AdminWorkspaceShell';
 import type {
@@ -75,6 +75,14 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from '@/components/ui/drawer';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { iconRegistryEntries, getRegistryIcon } from '@/data/iconRegistry';
 
@@ -104,12 +112,6 @@ type UploadValidationRule = {
   maxBytes: number;
   mimeTypes: string[];
   hint: string;
-};
-
-type UploadResult = {
-  storageId: string;
-  url: string;
-  fileName: string;
 };
 
 type UploadFieldKind = MediaFieldConfig['kind'];
@@ -151,6 +153,18 @@ const DEFAULT_BOOTSTRAP: BootstrapData = {
   aboutCategories: [],
   aboutItems: [],
 };
+
+const ADMIN_TABS: Array<{ id: SectionId; label: string }> = [
+  { id: 'site-settings', label: 'Site Settings' },
+  { id: 'experiences', label: 'Experiences' },
+  { id: 'projects', label: 'Projects' },
+  { id: 'languages', label: 'Programming Languages' },
+  { id: 'technologies', label: 'Technologies' },
+  { id: 'providers', label: 'Cloud Providers' },
+  { id: 'certificates', label: 'Certificates' },
+  { id: 'about-categories', label: 'About Categories' },
+  { id: 'about-items', label: 'About Items' },
+];
 
 function toFormValue(value: unknown, type: FieldType): string {
   if (value === undefined || value === null) {
@@ -344,7 +358,8 @@ type MediaUploadFieldProps = {
   value: string;
   required?: boolean;
   disabled?: boolean;
-  onChange: (nextUrl: string, result: UploadResult | null) => void;
+  // Keep uploaded asset metadata available for future persistence enhancements.
+  onChange: (nextUrl: string | null, uploadedAsset?: UploadedStorageAsset | null) => void;
   generateUploadUrl: () => Promise<string>;
   resolveStorageUrl: (args: { storageId: Id<'_storage'> }) => Promise<string | null>;
 };
@@ -406,11 +421,7 @@ function MediaUploadField({
         });
         setProgress(100);
         setLastFileName(uploaded.fileName);
-        onChange(uploaded.url, {
-          storageId: uploaded.storageId,
-          url: uploaded.url,
-          fileName: uploaded.fileName,
-        });
+        onChange(uploaded.url, uploaded);
       } catch (uploadError) {
         setError(uploadError instanceof Error ? uploadError.message : 'Upload failed.');
       } finally {
@@ -503,7 +514,7 @@ function MediaUploadField({
               onClick={() => {
                 setError(null);
                 setLastFileName(null);
-                onChange('', null);
+                onChange(null, null);
               }}
               disabled={disabled || isUploading}
             >
@@ -1112,7 +1123,7 @@ function TechEditableCard({
           label="Custom Icon Image"
           kind="logo"
           value={item.iconUrl}
-          onChange={(url) => onFieldChange(item._id, 'iconUrl', url)}
+          onChange={(url) => onFieldChange(item._id, 'iconUrl', url ?? '')}
           generateUploadUrl={generateUploadUrl}
           resolveStorageUrl={resolveStorageUrl}
         />
@@ -1577,7 +1588,11 @@ function EntityInspector({
   }
 
   if (mode === 'create' || (mode === 'edit' && selectedItem)) {
-    const singularTitle = config.title.endsWith('s') ? config.title.slice(0, -1) : config.title;
+    const singularTitle = config.title.endsWith('ies')
+      ? `${config.title.slice(0, -3)}y`
+      : config.title.endsWith('s')
+        ? config.title.slice(0, -1)
+        : config.title;
 
     return (
       <form className="space-y-4" onSubmit={submit}>
@@ -1657,7 +1672,7 @@ function EntityInspector({
               generateUploadUrl={generateUploadUrl}
               resolveStorageUrl={resolveStorageUrl}
               onChange={(nextUrl) => {
-                setForm((current) => ({ ...current, [mediaField.key]: nextUrl }));
+                setForm((current) => ({ ...current, [mediaField.key]: nextUrl ?? '' }));
               }}
             />
           ))}
@@ -1880,7 +1895,7 @@ function SiteSettingsInspector({
           generateUploadUrl={generateUploadUrl}
           resolveStorageUrl={resolveStorageUrl}
           disabled={isSaving}
-          onChange={(nextUrl) => setForm((current) => ({ ...current, logoUrl: nextUrl }))}
+          onChange={(nextUrl) => setForm((current) => ({ ...current, logoUrl: nextUrl ?? '' }))}
         />
 
         <MediaUploadField
@@ -1891,7 +1906,7 @@ function SiteSettingsInspector({
           generateUploadUrl={generateUploadUrl}
           resolveStorageUrl={resolveStorageUrl}
           disabled={isSaving}
-          onChange={(nextUrl) => setForm((current) => ({ ...current, profileImageUrl: nextUrl }))}
+          onChange={(nextUrl) => setForm((current) => ({ ...current, profileImageUrl: nextUrl ?? '' }))}
         />
 
         <MediaUploadField
@@ -1902,7 +1917,7 @@ function SiteSettingsInspector({
           generateUploadUrl={generateUploadUrl}
           resolveStorageUrl={resolveStorageUrl}
           disabled={isSaving}
-          onChange={(nextUrl) => setForm((current) => ({ ...current, resumeUrl: nextUrl }))}
+          onChange={(nextUrl) => setForm((current) => ({ ...current, resumeUrl: nextUrl ?? '' }))}
         />
 
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
@@ -2076,6 +2091,8 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
   const [isSavingProjectOrder, setIsSavingProjectOrder] = useState(false);
   const [techDraftItems, setTechDraftItems] = useState<TechDraftItem[] | null>(null);
   const [isSavingTechBatch, setIsSavingTechBatch] = useState(false);
+  const [pendingSectionId, setPendingSectionId] = useState<SectionId | null>(null);
+  const [isDiscardTechChangesDialogOpen, setIsDiscardTechChangesDialogOpen] = useState(false);
 
   useEffect(() => {
     setSelectedItemId(null);
@@ -2344,6 +2361,20 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
 
   const resetTechDraft = useCallback(() => {
     setTechDraftItems(null);
+  }, []);
+
+  const confirmDiscardTechDraftAndSwitchSection = useCallback(() => {
+    resetTechDraft();
+    if (pendingSectionId) {
+      setActiveSectionId(pendingSectionId);
+    }
+    setPendingSectionId(null);
+    setIsDiscardTechChangesDialogOpen(false);
+  }, [pendingSectionId, resetTechDraft]);
+
+  const cancelDiscardTechDraftDialog = useCallback(() => {
+    setPendingSectionId(null);
+    setIsDiscardTechChangesDialogOpen(false);
   }, []);
 
   const saveTechBatch = useCallback(async () => {
@@ -2650,18 +2681,6 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
     [data, providerOptions, aboutCategoryOptions],
   );
 
-  const tabs: Array<{ id: SectionId; label: string }> = [
-    { id: 'site-settings', label: 'Site Settings' },
-    { id: 'experiences', label: 'Experiences' },
-    { id: 'projects', label: 'Projects' },
-    { id: 'languages', label: 'Programming Languages' },
-    { id: 'technologies', label: 'Technologies' },
-    { id: 'providers', label: 'Cloud Providers' },
-    { id: 'certificates', label: 'Certificates' },
-    { id: 'about-categories', label: 'About Categories' },
-    { id: 'about-items', label: 'About Items' },
-  ];
-
   const activeEntityConfig = activeSectionId === 'site-settings' ? null : sectionConfigs[activeSectionId];
   const activeItems = useMemo(
     () => (activeEntityConfig ? getSectionItems(activeEntityConfig.id, data) : []),
@@ -2848,6 +2867,18 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
     () => panelMode !== 'view' || selectedItemId !== null,
     [panelMode, selectedItemId],
   );
+  const handleSectionChange = useCallback(
+    (nextId: SectionId) => {
+      if (hasTechChanges) {
+        setPendingSectionId(nextId);
+        setIsDiscardTechChangesDialogOpen(true);
+        return;
+      }
+
+      setActiveSectionId(nextId);
+    },
+    [hasTechChanges],
+  );
 
   if (!bootstrap) {
     return (
@@ -3032,15 +3063,9 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
     <>
       <AdminWorkspaceShell
         user={user}
-        tabs={tabs}
+        tabs={ADMIN_TABS}
         activeSectionId={activeSectionId}
-        onSectionChange={(nextId) => {
-          if (hasTechChanges) {
-            if (!window.confirm('You have unsaved technology changes. Discard them?')) return;
-            resetTechDraft();
-          }
-          setActiveSectionId(nextId);
-        }}
+        onSectionChange={handleSectionChange}
         sectionTitle={sectionTitle}
         sectionDescription={sectionDescription}
         onCreateOrEditSettings={() => {
@@ -3073,6 +3098,33 @@ export default function AdminDashboard({ user }: { user: AdminUser }) {
       >
         {inspectorBody}
       </ItemInspectorDrawer>
+
+      <Dialog
+        open={isDiscardTechChangesDialogOpen}
+        onOpenChange={(open) => {
+          setIsDiscardTechChangesDialogOpen(open);
+          if (!open) {
+            setPendingSectionId(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Discard unsaved technology changes?</DialogTitle>
+            <DialogDescription>
+              You have unsaved edits in Technologies. Switching sections now will discard those changes.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={cancelDiscardTechDraftDialog}>
+              Keep editing
+            </Button>
+            <Button type="button" variant="destructive" onClick={confirmDiscardTechDraftAndSwitchSection}>
+              Discard and switch
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

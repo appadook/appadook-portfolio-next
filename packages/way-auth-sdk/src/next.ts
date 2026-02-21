@@ -356,17 +356,19 @@ export function createWayAuthNext(options: WayAuthNextOptions = {}) {
     try {
       claims = await (await getGuard()).verifyAccessToken(accessToken);
     } catch (error) {
+      if (!(error instanceof WayAuthTokenVerificationError)) {
+        throw error;
+      }
+
       const meUser = await fetchUserFromMe(accessToken);
       if (!meUser) {
         return null;
       }
 
-      if (process.env.NODE_ENV !== "production") {
-        console.warn(
-          "WAY Auth token verification failed; using /me fallback. Check issuer/audience/JWKS discovery settings.",
-          error,
-        );
-      }
+      console.warn(
+        "WAY Auth token verification failed; using /me fallback. Check issuer/audience/JWKS discovery settings.",
+        error,
+      );
 
       return {
         accessToken,
@@ -542,12 +544,12 @@ export function createWayAuthNext(options: WayAuthNextOptions = {}) {
     }
   }
 
-  function startSessionKeepAlive(options: { intervalMs?: number } = {}) {
+  function startSessionKeepAlive(keepAliveOptions: { intervalMs?: number } = {}) {
     if (typeof window === "undefined" || typeof document === "undefined") {
       return () => {};
     }
 
-    const intervalMs = options.intervalMs ?? 5 * 60 * 1_000;
+    const intervalMs = keepAliveOptions.intervalMs ?? 5 * 60 * 1_000;
     let refreshInFlight: Promise<void> | null = null;
 
     const runRefresh = () => {

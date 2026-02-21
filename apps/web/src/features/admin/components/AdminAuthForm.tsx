@@ -110,7 +110,7 @@ export function AdminAuthForm({ mode }: { mode: AdminAuthMode }) {
                 className="h-px bg-[hsl(43,74%,49%)] mb-10 origin-left w-16"
               />
               <h2
-                className="font-admin-display text-5xl md:text-6xl font-bold tracking-tight mb-4 tracking-[0.02em]"
+                className="font-admin-display text-5xl md:text-6xl font-bold mb-4 tracking-[0.02em]"
               >
                 {isLogin ? 'Welcome Back' : 'Create Account'}
               </h2>
@@ -146,7 +146,7 @@ export function AdminAuthForm({ mode }: { mode: AdminAuthMode }) {
               <div>
                 <label
                   htmlFor="admin-password"
-                  className="text-[10px] uppercase tracking-[0.35em] text-white/35 mb-4 block"
+                  className="font-admin-mono text-[10px] uppercase tracking-[0.35em] text-white/35 mb-4 block"
                 >
                   Password
                 </label>
@@ -157,7 +157,7 @@ export function AdminAuthForm({ mode }: { mode: AdminAuthMode }) {
                   onChange={(e) => setPassword(e.target.value)}
                   className="noir-input font-admin-mono w-full rounded-none bg-transparent border-0 border-b border-white/10 text-white text-base py-3 px-0 outline-none transition-all duration-500"
                   placeholder="••••••••"
-                  autoComplete="current-password"
+                  autoComplete={isLogin ? 'current-password' : 'new-password'}
                   minLength={8}
                   required
                 />
