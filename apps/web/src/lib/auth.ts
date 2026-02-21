@@ -46,6 +46,7 @@ if (!wayAuthBaseUrl) {
 
 export const auth = createWayAuthNext({
   baseUrl: wayAuthBaseUrl,
+  clientCredentials: "include",
 });
 
 export const wayAuthMiddleware = auth.middleware;

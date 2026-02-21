@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
+import { AdminSessionBootstrap } from '@/app/(app)/admin/session-bootstrap';
 
 const adminFontVars: CSSProperties = {
   ['--font-admin-display' as string]: '"Bebas Neue", "Arial Narrow", "Impact", sans-serif',
@@ -9,6 +10,7 @@ const adminFontVars: CSSProperties = {
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
     <div className="admin-font-scope" style={adminFontVars}>
+      <AdminSessionBootstrap />
       {children}
     </div>
   );

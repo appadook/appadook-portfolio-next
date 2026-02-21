@@ -415,7 +415,7 @@ type MediaUploadFieldProps = {
   resolveStorageUrl: (args: { storageId: Id<'_storage'> }) => Promise<string | null>;
 };
 
-export function MediaUploadField({
+function MediaUploadField({
   id,
   label,
   kind,
@@ -1494,7 +1494,7 @@ type EntityInspectorProps = {
   resolveStorageUrl: (args: { storageId: Id<'_storage'> }) => Promise<string | null>;
 };
 
-export function EntityInspector({
+function EntityInspector({
   config,
   selectedItem,
   mode,
@@ -1849,7 +1849,7 @@ type SiteSettingsInspectorProps = {
   resolveStorageUrl: (args: { storageId: Id<'_storage'> }) => Promise<string | null>;
 };
 
-export function SiteSettingsInspector({
+function SiteSettingsInspector({
   mode,
   settings,
   onModeChange,

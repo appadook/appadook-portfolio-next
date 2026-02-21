@@ -68,8 +68,6 @@ WAY_AUTH_BASE_URL=https://way-my-auth-service.vercel.app
 # - no trailing slash
 # - no path/query/hash
 
-# Optional: if false, disables fallback content when Convex is empty/unavailable
-NEXT_PUBLIC_ENABLE_CONTENT_FALLBACK=true
 ```
 
 ## Local Development
