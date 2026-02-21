@@ -1,4 +1,4 @@
-import type { Project } from '@/lib/portfolio.types';
+import type { Project } from '@/features/public/types';
 
 type ProjectBadgeTone = 'danger' | 'success' | 'brand' | 'neutral';
 

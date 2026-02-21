@@ -2,18 +2,18 @@
 
 import dynamic from 'next/dynamic';
 import { motion } from 'framer-motion';
-import Navigation from '@/components/Navigation';
-import HeroSection from '@/components/HeroSection';
-import AboutSection from '@/components/AboutSection';
-import ProjectsSection from '@/components/ProjectsSection';
-import ExperienceSection from '@/components/ExperienceSection';
-import SkillsSection from '@/components/SkillsSection';
-import TechnologiesSectionNew from '@/components/TechnologiesSectionNew';
-import ContactSection from '@/components/ContactSection';
-import AnimatedSection from '@/components/AnimatedSection';
-import type { PortfolioSnapshot } from '@/lib/portfolio.types';
+import Navigation from '@/features/public/components/Navigation';
+import HeroSection from '@/features/public/components/HeroSection';
+import AboutSection from '@/features/public/components/AboutSection';
+import ProjectsSection from '@/features/public/components/ProjectsSection';
+import ExperienceSection from '@/features/public/components/ExperienceSection';
+import SkillsSection from '@/features/public/components/SkillsSection';
+import TechnologiesSectionNew from '@/features/public/components/TechnologiesSectionNew';
+import ContactSection from '@/features/public/components/ContactSection';
+import AnimatedSection from '@/features/public/components/AnimatedSection';
+import type { PortfolioSnapshot } from '@/features/public/types';
 
-const BackgroundSpline = dynamic(() => import('@/components/BackgroundSpline'), {
+const BackgroundSpline = dynamic(() => import('@/features/public/components/BackgroundSpline'), {
   ssr: false,
 });
 

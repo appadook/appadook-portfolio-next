@@ -14,13 +14,15 @@ bun add @way/auth-sdk
 bunx way-auth-setup --framework next --minimal
 ```
 
-3. Ensure this env key exists in `.env.local`:
+3. Ensure these env keys exist in `.env.local`:
 
 ```bash
+NEXT_PUBLIC_WAY_AUTH_BASE_URL="https://way-my-auth-service.vercel.app"
 WAY_AUTH_BASE_URL="https://way-my-auth-service.vercel.app"
 ```
 
-No additional WAY Auth env vars are required for baseline Next.js integration.
+`NEXT_PUBLIC_WAY_AUTH_BASE_URL` is required for browser runtime. `WAY_AUTH_BASE_URL` is recommended as server fallback.
+Both must be origin-only (no trailing slash/path/query/hash).
 
 ## What was generated
 
@@ -32,7 +34,7 @@ No additional WAY Auth env vars are required for baseline Next.js integration.
 - Re-exports SDK middleware and matcher.
 
 3. `.env.local`
-- Merged/updated with `WAY_AUTH_BASE_URL`.
+- Merged/updated with `NEXT_PUBLIC_WAY_AUTH_BASE_URL` and `WAY_AUTH_BASE_URL`.
 
 ## Runtime mental model
 
