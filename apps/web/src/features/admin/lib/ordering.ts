@@ -1,7 +1,9 @@
 export function sortByOrder<T extends { order?: unknown }>(items: T[]): T[] {
   return [...items].sort((a, b) => {
-    const left = Number(a.order ?? 0);
-    const right = Number(b.order ?? 0);
+    const leftValue = Number(a.order ?? 0);
+    const rightValue = Number(b.order ?? 0);
+    const left = Number.isFinite(leftValue) ? leftValue : 0;
+    const right = Number.isFinite(rightValue) ? rightValue : 0;
     return left - right;
   });
 }
@@ -39,16 +41,10 @@ export function reconcileDraftOrder(draftIds: string[] | null, canonicalIds: str
 }
 
 export function getNextOrder<T extends { order?: unknown }>(items: T[]): number {
-  if (items.length === 0) {
-    return 1;
-  }
+  const maxOrder = items.reduce((max, item) => {
+    const value = Number(item.order ?? 0);
+    return Number.isFinite(value) && value > max ? value : max;
+  }, 0);
 
-  return (
-    Math.max(
-      ...items.map((item) => {
-        const value = Number(item.order ?? 0);
-        return Number.isFinite(value) ? value : 0;
-      }),
-    ) + 1
-  );
+  return maxOrder + 1;
 }

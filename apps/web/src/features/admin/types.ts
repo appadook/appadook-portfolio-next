@@ -2,7 +2,7 @@ import type { FunctionReference } from 'convex/server';
 
 export type AdminUser = {
   id: string;
-  email: string;
+  email?: string;
 };
 
 export type AdminEntity = {

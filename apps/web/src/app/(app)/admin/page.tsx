@@ -3,7 +3,7 @@ import AdminDashboard from '@/features/admin/components/AdminDashboard';
 import { requireAdminSessionOrRedirect } from '@/server/auth/session';
 
 export default async function AdminPage() {
-  const session = await requireAdminSessionOrRedirect('/admin');
+  const session = await requireAdminSessionOrRedirect();
 
   return (
     <AdminProviders>

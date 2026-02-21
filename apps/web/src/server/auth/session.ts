@@ -6,7 +6,7 @@ import { auth } from '@/lib/auth';
 
 type SessionUser = {
   id: string;
-  email: string;
+  email?: string;
 };
 
 type SessionResult = {
@@ -15,8 +15,13 @@ type SessionResult = {
 
 function getRequestOrigin(requestHeaders: Headers): string {
   const host = requestHeaders.get('host') ?? 'localhost:3000';
-  const forwardedProto = requestHeaders.get('x-forwarded-proto');
-  const protocol = forwardedProto ?? (process.env.NODE_ENV === 'development' ? 'http' : 'https');
+  const forwardedProto = requestHeaders
+    .get('x-forwarded-proto')
+    ?.split(',')
+    .map((value) => value.trim().toLowerCase())
+    .find(Boolean);
+  const fallbackProtocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
+  const protocol = forwardedProto === 'http' || forwardedProto === 'https' ? forwardedProto : fallbackProtocol;
   return `${protocol}://${host}`;
 }
 
@@ -35,7 +40,7 @@ export async function getAdminSessionFromHeaders(pathname = '/admin'): Promise<S
   return {
     user: {
       id: session.user.id,
-      email: session.user.email ?? 'admin@way.local',
+      email: session.user.email ?? undefined,
     },
   };
 }

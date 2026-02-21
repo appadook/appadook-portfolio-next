@@ -11,5 +11,5 @@ export function asStringList(value: unknown): string[] {
 }
 
 export function asId(value: unknown): string {
-  return typeof value === 'string' ? value : String(value);
+  return String(value);
 }

@@ -23,6 +23,8 @@ const config = {
         sans: ["DM Sans", "system-ui", "-apple-system", "sans-serif"],
         display: ["Playfair Display", "Georgia", "serif"],
         mono: ["JetBrains Mono", "Fira Code", "Consolas", "monospace"],
+        "admin-display": ["var(--font-admin-display)", "Impact", "sans-serif"],
+        "admin-mono": ["var(--font-admin-mono)", "monospace"],
       },
       colors: {
         border: "hsl(var(--border))",

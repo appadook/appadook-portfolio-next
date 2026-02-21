@@ -46,15 +46,20 @@ export function AdminWorkspaceShell({
           <div>
             <p className="font-mono text-xs uppercase tracking-[0.2em] text-primary/80">Admin</p>
             <h1 className="font-display text-3xl">Portfolio Control Center</h1>
-            <p className="text-sm text-muted-foreground">Signed in as {user.email}</p>
+            <p className="text-sm text-muted-foreground">Signed in as {user.email ?? 'Unknown user'}</p>
           </div>
           <Button
             variant="outline"
             className="border-border/60 hover:border-primary/50"
             onClick={async () => {
-              await auth.client.logout();
-              router.push('/admin/login');
-              router.refresh();
+              try {
+                await auth.client.logout();
+              } catch (error) {
+                console.error('WAY Auth logout failed:', error);
+              } finally {
+                router.push('/admin/login');
+                router.refresh();
+              }
             }}
           >
             <LogOut className="mr-2 h-4 w-4" />
@@ -76,6 +81,7 @@ export function AdminWorkspaceShell({
                     ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:bg-background-subtle/70 hover:text-foreground',
                 )}
+                aria-current={activeSectionId === tab.id ? 'page' : undefined}
                 onClick={() => onSectionChange(tab.id)}
               >
                 {tab.label}

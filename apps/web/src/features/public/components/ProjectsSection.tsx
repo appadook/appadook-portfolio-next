@@ -5,7 +5,7 @@ import { Github, ExternalLink, ArrowUpRight, ChevronLeft, ChevronRight } from "l
 import useEmblaCarousel from "embla-carousel-react";
 import ProjectModal from "./ProjectModal";
 import type { Project } from "@/features/public/types";
-import { getProjectCardMeta } from "@/lib/projectCardMeta";
+import { getProjectCardMeta } from "@/features/public/lib/projectCardMeta";
 import AnimatedSection from "./AnimatedSection";
 import { useBreakpoint } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";

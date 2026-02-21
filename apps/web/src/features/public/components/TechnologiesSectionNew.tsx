@@ -52,7 +52,6 @@ const ProviderCard = ({
   onCertClick: (cert: Certificate, name: string) => void;
 }) => {
   const CpIcon = getRegistryIcon(provider.iconName) ?? cloudProviderIcons[provider.name] ?? Cloud;
-  const hasCustomIcon = !!provider.iconUrl;
   const certCount = provider.certificates?.length || 0;
 
   return (
@@ -76,9 +75,9 @@ const ProviderCard = ({
               : 'bg-primary/[0.06] border-primary/15 group-hover:bg-primary/10'
           }`}
         >
-          {hasCustomIcon ? (
+          {provider.iconUrl ? (
             <Image
-              src={provider.iconUrl!}
+              src={provider.iconUrl}
               alt={provider.name}
               width={28}
               height={28}
@@ -296,7 +295,7 @@ const TechnologiesSectionNew = ({
                         >
                           {tech.customIconUrl ? (
                             <Image
-                              src={tech.customIconUrl!}
+                              src={tech.customIconUrl}
                               alt={tech.name}
                               width={36}
                               height={36}

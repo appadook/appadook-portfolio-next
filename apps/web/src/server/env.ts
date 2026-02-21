@@ -35,10 +35,13 @@ export function getWayAuthBaseUrlServer(): string {
   const serverValue = process.env.WAY_AUTH_BASE_URL;
   const publicValue = process.env.NEXT_PUBLIC_WAY_AUTH_BASE_URL;
   const resolved = serverValue ?? publicValue;
-  return ensureHttpUrl(resolved ?? '', serverValue ? 'WAY_AUTH_BASE_URL' : 'NEXT_PUBLIC_WAY_AUTH_BASE_URL');
+  return ensureHttpUrl(
+    resolved ?? '',
+    serverValue != null ? 'WAY_AUTH_BASE_URL' : 'NEXT_PUBLIC_WAY_AUTH_BASE_URL',
+  );
 }
 
-export function getWayAuthBaseUrlClientSafe(): string | null {
+export function getWayAuthPublicBaseUrl(): string | null {
   return getOptionalHttpOrigin(process.env.NEXT_PUBLIC_WAY_AUTH_BASE_URL, 'NEXT_PUBLIC_WAY_AUTH_BASE_URL');
 }
 

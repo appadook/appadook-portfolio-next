@@ -133,6 +133,61 @@ describe("next adapter", () => {
     }
   });
 
+  it("falls back to me when refresh token is missing during bootstrap", async () => {
+    const auth = createWayAuthNext({
+      baseUrl: "https://auth.example.com",
+      discoveryMode: "never",
+      fetch: createRouteFetch({
+        "https://auth.example.com/api/v1/login": async () =>
+          jsonResponse({
+            accessToken: "token_1",
+            tokenType: "Bearer",
+            expiresIn: 900,
+            user: {
+              id: "user_1",
+              email: "demo@example.com",
+            },
+          }),
+        "https://auth.example.com/api/v1/refresh": async () =>
+          jsonResponse(
+            {
+              error: {
+                code: "missing_refresh_token",
+                message: "Refresh token is required.",
+              },
+            },
+            401,
+          ),
+        "https://auth.example.com/api/v1/me": async (_url, init) => {
+          const authorization = new Headers(init.headers).get("authorization");
+          if (authorization !== "Bearer token_1") {
+            return jsonResponse({ error: { code: "invalid_token", message: "Bad token" } }, 401);
+          }
+
+          return jsonResponse({
+            user: {
+              id: "user_1",
+              email: "demo@example.com",
+            },
+            sessionId: "session_1",
+          });
+        },
+      }),
+    });
+
+    await auth.client.login({
+      email: "demo@example.com",
+      password: "password123",
+    });
+
+    const result = await auth.client.bootstrapSession();
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.user.id).toBe("user_1");
+      expect(result.sessionId).toBe("session_1");
+    }
+  });
+
   it("returns null without cookie and returns session when cookie is valid", async () => {
     const signed = await createSignedToken();
     const auth = createWayAuthNext({

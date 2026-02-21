@@ -47,8 +47,7 @@ export function AdminAuthForm({ mode }: { mode: AdminAuthMode }) {
         >
           <Link
             href="/"
-            className="group flex items-center gap-3"
-            style={{ fontFamily: 'var(--font-admin-mono)' }}
+            className="group flex items-center gap-3 font-admin-mono"
           >
             <motion.span
               className="inline-block w-6 h-px bg-white/30 group-hover:bg-[hsl(43,74%,49%)] group-hover:w-10 transition-all duration-500"
@@ -68,8 +67,7 @@ export function AdminAuthForm({ mode }: { mode: AdminAuthMode }) {
             className="relative"
           >
             <h1
-              className="text-[15vw] leading-[0.82] font-bold text-white/[0.025] select-none whitespace-pre-line"
-              style={{ fontFamily: 'var(--font-admin-display)' }}
+              className="font-admin-display text-[15vw] leading-[0.82] font-bold text-white/[0.025] select-none whitespace-pre-line"
             >
               {isLogin ? 'SIGN\nIN' : 'JOIN\nUS'}
             </h1>
@@ -87,8 +85,7 @@ export function AdminAuthForm({ mode }: { mode: AdminAuthMode }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 1.2, duration: 0.8 }}
-            className="absolute bottom-12 left-12"
-            style={{ fontFamily: 'var(--font-admin-mono)' }}
+            className="font-admin-mono absolute bottom-12 left-12"
           >
             <span className="text-[10px] text-white/15 tracking-[0.5em] uppercase">
               Admin Portal &mdash; {new Date().getFullYear()}
@@ -113,14 +110,12 @@ export function AdminAuthForm({ mode }: { mode: AdminAuthMode }) {
                 className="h-px bg-[hsl(43,74%,49%)] mb-10 origin-left w-16"
               />
               <h2
-                className="text-5xl md:text-6xl font-bold tracking-tight mb-4"
-                style={{ fontFamily: 'var(--font-admin-display)', letterSpacing: '0.02em' }}
+                className="font-admin-display text-5xl md:text-6xl font-bold tracking-tight mb-4 tracking-[0.02em]"
               >
                 {isLogin ? 'Welcome Back' : 'Create Account'}
               </h2>
               <p
-                className="text-white/25 text-xs tracking-[0.15em]"
-                style={{ fontFamily: 'var(--font-admin-mono)' }}
+                className="font-admin-mono text-white/25 text-xs tracking-[0.15em]"
               >
                 {isLogin
                   ? 'Enter your credentials to continue'
@@ -131,42 +126,38 @@ export function AdminAuthForm({ mode }: { mode: AdminAuthMode }) {
             <form onSubmit={submit} className="space-y-10">
               <div>
                 <label
-                  className="text-[10px] uppercase tracking-[0.35em] text-white/35 mb-4 block"
-                  style={{ fontFamily: 'var(--font-admin-mono)' }}
+                  htmlFor="admin-email"
+                  className="font-admin-mono text-[10px] uppercase tracking-[0.35em] text-white/35 mb-4 block"
                 >
                   Email Address
                 </label>
                 <input
+                  id="admin-email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="noir-input w-full bg-transparent border-0 border-b border-white/10 text-white text-base py-3 px-0 outline-none transition-all duration-500"
-                  style={{
-                    fontFamily: 'var(--font-admin-mono)',
-                    borderRadius: 0,
-                  }}
+                  className="noir-input font-admin-mono w-full rounded-none bg-transparent border-0 border-b border-white/10 text-white text-base py-3 px-0 outline-none transition-all duration-500"
                   placeholder="you@example.com"
+                  autoComplete="email"
                   required
                 />
               </div>
 
               <div>
                 <label
+                  htmlFor="admin-password"
                   className="text-[10px] uppercase tracking-[0.35em] text-white/35 mb-4 block"
-                  style={{ fontFamily: 'var(--font-admin-mono)' }}
                 >
                   Password
                 </label>
                 <input
+                  id="admin-password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="noir-input w-full bg-transparent border-0 border-b border-white/10 text-white text-base py-3 px-0 outline-none transition-all duration-500"
-                  style={{
-                    fontFamily: 'var(--font-admin-mono)',
-                    borderRadius: 0,
-                  }}
+                  className="noir-input font-admin-mono w-full rounded-none bg-transparent border-0 border-b border-white/10 text-white text-base py-3 px-0 outline-none transition-all duration-500"
                   placeholder="••••••••"
+                  autoComplete="current-password"
                   minLength={8}
                   required
                 />
@@ -176,8 +167,7 @@ export function AdminAuthForm({ mode }: { mode: AdminAuthMode }) {
                 <motion.p
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
-                  className="text-red-400/80 text-xs tracking-wide"
-                  style={{ fontFamily: 'var(--font-admin-mono)' }}
+                  className="font-admin-mono text-red-400/80 text-xs tracking-wide"
                 >
                   &gt; {error}
                 </motion.p>
@@ -188,8 +178,7 @@ export function AdminAuthForm({ mode }: { mode: AdminAuthMode }) {
                 disabled={isSubmitting}
                 whileHover={{ x: 4 }}
                 whileTap={{ scale: 0.98 }}
-                className="w-full py-4 bg-[hsl(43,74%,49%)] text-[#080808] text-[11px] uppercase tracking-[0.4em] font-medium hover:bg-[hsl(43,74%,58%)] transition-all duration-500 disabled:opacity-30 relative overflow-hidden"
-                style={{ fontFamily: 'var(--font-admin-mono)', borderRadius: 0 }}
+                className="font-admin-mono w-full rounded-none py-4 bg-[hsl(43,74%,49%)] text-[#080808] text-[11px] uppercase tracking-[0.4em] font-medium hover:bg-[hsl(43,74%,58%)] transition-all duration-500 disabled:opacity-30 relative overflow-hidden"
               >
                 <span className="relative z-10">
                   {isSubmitting
@@ -203,8 +192,7 @@ export function AdminAuthForm({ mode }: { mode: AdminAuthMode }) {
 
             <div className="mt-12 pt-8 border-t border-white/[0.05]">
               <p
-                className="text-white/25 text-xs tracking-wide"
-                style={{ fontFamily: 'var(--font-admin-mono)' }}
+                className="font-admin-mono text-white/25 text-xs tracking-wide"
               >
                 {isLogin ? "Don't have an account?" : 'Already registered?'}{' '}
                 <Link

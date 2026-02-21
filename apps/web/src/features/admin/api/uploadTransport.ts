@@ -16,7 +16,7 @@ export async function uploadAssetWithSignedUrl(input: {
 
   const uploadResponse = await fetch(uploadUrl, {
     method: 'POST',
-    headers: { 'Content-Type': file.type },
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
     body: file,
   });
 
@@ -24,7 +24,16 @@ export async function uploadAssetWithSignedUrl(input: {
     throw new Error('Upload failed. Please try again.');
   }
 
-  const payload = (await uploadResponse.json()) as { storageId?: string };
+  const uploadResponseClone = uploadResponse.clone();
+  let payload: { storageId?: string };
+  try {
+    payload = (await uploadResponse.json()) as { storageId?: string };
+  } catch (error) {
+    const rawBody = await uploadResponseClone.text().catch(() => '<unavailable>');
+    const errorMessage = error instanceof Error ? ` ${error.message}` : '';
+    throw new Error(`Upload failed (${uploadResponse.status}). ${rawBody}${errorMessage}`);
+  }
+
   if (!payload.storageId) {
     throw new Error('Upload failed. Missing storage id.');
   }

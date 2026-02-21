@@ -17,7 +17,7 @@ import {
   isPresent,
 } from '@/features/public/lib/mappers';
 
-const EMPTY_SNAPSHOT: PortfolioSnapshot = {
+export const EMPTY_SNAPSHOT: PortfolioSnapshot = {
   siteSettings: {
     _id: 'site-settings',
   },
@@ -30,13 +30,14 @@ const EMPTY_SNAPSHOT: PortfolioSnapshot = {
   aboutItems: [],
 };
 
-function getConvexUrl() {
-  return getConvexPublicUrl();
-}
-
 const getConvexClient = cache(() => {
-  const convexUrl = getConvexUrl();
+  const convexUrl = getConvexPublicUrl();
   if (!convexUrl) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn(
+        'Convex client not created: NEXT_PUBLIC_CONVEX_URL is missing or invalid (must be an origin URL).',
+      );
+    }
     return null;
   }
   return new ConvexHttpClient(convexUrl);

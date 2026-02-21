@@ -120,4 +120,4 @@ Common flags:
 
 See:
 
-- `/Users/kurtik/code/public/way-my_auth_service/packages/way-auth-sdk/GUIDE.md`
+- `./GUIDE.md`

@@ -71,6 +71,13 @@ const DEFAULT_MIDDLEWARE_OPTIONS: WayAuthNextMiddlewareOptions = {
   nextParamName: "next",
 };
 
+function getAccessTokenCookieMaxAgeSeconds(result?: { expiresIn?: unknown }): number {
+  if (typeof result?.expiresIn === "number" && Number.isFinite(result.expiresIn) && result.expiresIn > 0) {
+    return Math.floor(result.expiresIn);
+  }
+  return DEFAULT_ACCESS_TOKEN_COOKIE_MAX_AGE_SECONDS;
+}
+
 function normalizePath(path: string): string {
   const trimmed = path.trim();
   if (!trimmed) {
@@ -191,6 +198,15 @@ function toUiError(error: unknown): WayAuthUiError {
   };
 }
 
+function getErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
+  const candidate = error as { code?: unknown };
+  return typeof candidate.code === "string" ? candidate.code : null;
+}
+
 function isWithinAdminPrefix(pathname: string, adminPrefix: string): boolean {
   return pathname === adminPrefix || pathname.startsWith(`${adminPrefix}/`);
 }
@@ -289,6 +305,22 @@ export function createWayAuthNext(options: WayAuthNextOptions = {}) {
     clearAccessTokenCookie(accessTokenCookieName);
   }
 
+  async function hydrateAccessTokenStoreFromCookie() {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const tokenInStore = await tokenStore.getAccessToken();
+    if (tokenInStore) {
+      return;
+    }
+
+    const tokenFromCookie = parseCookieValue(document.cookie, accessTokenCookieName);
+    if (tokenFromCookie) {
+      await tokenStore.setAccessToken(tokenFromCookie);
+    }
+  }
+
   async function fetchUserFromMe(accessToken: string): Promise<WayAuthUser | null> {
     const resolved = await resolvedConfigPromise;
     try {
@@ -320,11 +352,33 @@ export function createWayAuthNext(options: WayAuthNextOptions = {}) {
       return null;
     }
 
-    let claims: WayAuthVerifiedToken;
+    let claims: WayAuthVerifiedToken | null = null;
     try {
       claims = await (await getGuard()).verifyAccessToken(accessToken);
-    } catch {
-      return null;
+    } catch (error) {
+      const meUser = await fetchUserFromMe(accessToken);
+      if (!meUser) {
+        return null;
+      }
+
+      if (process.env.NODE_ENV !== "production") {
+        console.warn(
+          "WAY Auth token verification failed; using /me fallback. Check issuer/audience/JWKS discovery settings.",
+          error,
+        );
+      }
+
+      return {
+        accessToken,
+        claims: {
+          sub: meUser.id,
+        },
+        user: {
+          id: meUser.id,
+          email: meUser.email,
+        },
+        source: "me",
+      };
     }
 
     if (sessionOptions.skipUserHydration) {
@@ -420,10 +474,7 @@ export function createWayAuthNext(options: WayAuthNextOptions = {}) {
   async function login(input: WayAuthCredentialInput) {
     const client = await getClient();
     const result = await client.login(input);
-    accessTokenCookieMaxAgeSeconds =
-      typeof result.expiresIn === "number" && Number.isFinite(result.expiresIn) && result.expiresIn > 0
-        ? Math.floor(result.expiresIn)
-        : DEFAULT_ACCESS_TOKEN_COOKIE_MAX_AGE_SECONDS;
+    accessTokenCookieMaxAgeSeconds = getAccessTokenCookieMaxAgeSeconds(result);
     await syncAccessTokenCookieFromStore();
     return result;
   }
@@ -431,10 +482,7 @@ export function createWayAuthNext(options: WayAuthNextOptions = {}) {
   async function signup(input: WayAuthCredentialInput) {
     const client = await getClient();
     const result = await client.signup(input);
-    accessTokenCookieMaxAgeSeconds =
-      typeof result.expiresIn === "number" && Number.isFinite(result.expiresIn) && result.expiresIn > 0
-        ? Math.floor(result.expiresIn)
-        : DEFAULT_ACCESS_TOKEN_COOKIE_MAX_AGE_SECONDS;
+    accessTokenCookieMaxAgeSeconds = getAccessTokenCookieMaxAgeSeconds(result);
     await syncAccessTokenCookieFromStore();
     return result;
   }
@@ -442,10 +490,7 @@ export function createWayAuthNext(options: WayAuthNextOptions = {}) {
   async function refresh() {
     const client = await getClient();
     const result = await client.refresh();
-    accessTokenCookieMaxAgeSeconds =
-      typeof result.expiresIn === "number" && Number.isFinite(result.expiresIn) && result.expiresIn > 0
-        ? Math.floor(result.expiresIn)
-        : DEFAULT_ACCESS_TOKEN_COOKIE_MAX_AGE_SECONDS;
+    accessTokenCookieMaxAgeSeconds = getAccessTokenCookieMaxAgeSeconds(result);
     await syncAccessTokenCookieFromStore();
     return result;
   }
@@ -459,12 +504,11 @@ export function createWayAuthNext(options: WayAuthNextOptions = {}) {
 
   async function bootstrapSession(): Promise<WayAuthBootstrapResult> {
     const client = await getClient();
+    await hydrateAccessTokenStoreFromCookie();
+
     try {
       const refreshed = await client.refresh();
-      accessTokenCookieMaxAgeSeconds =
-        typeof refreshed.expiresIn === "number" && Number.isFinite(refreshed.expiresIn) && refreshed.expiresIn > 0
-          ? Math.floor(refreshed.expiresIn)
-          : DEFAULT_ACCESS_TOKEN_COOKIE_MAX_AGE_SECONDS;
+      accessTokenCookieMaxAgeSeconds = getAccessTokenCookieMaxAgeSeconds(refreshed);
       const me = await client.me();
       await syncAccessTokenCookieFromStore();
       return {
@@ -473,11 +517,27 @@ export function createWayAuthNext(options: WayAuthNextOptions = {}) {
         sessionId: me.sessionId,
       };
     } catch (error) {
+      let bootstrapError: unknown = error;
+      if (getErrorCode(error) === "missing_refresh_token") {
+        try {
+          const me = await client.me();
+          await syncAccessTokenCookieFromStore();
+          return {
+            ok: true,
+            user: me.user,
+            sessionId: me.sessionId,
+          };
+        } catch (meError) {
+          bootstrapError = meError;
+          // Fall through to standard failure handling below.
+        }
+      }
+
       await client.clearAccessToken();
       clearAccessTokenCookie(accessTokenCookieName);
       return {
         ok: false,
-        error: toUiError(error),
+        error: toUiError(bootstrapError),
       };
     }
   }
@@ -488,20 +548,34 @@ export function createWayAuthNext(options: WayAuthNextOptions = {}) {
     }
 
     const intervalMs = options.intervalMs ?? 5 * 60 * 1_000;
+    let refreshInFlight: Promise<void> | null = null;
 
     const runRefresh = () => {
-      void refresh().catch(() => {
-        // Keep-alive should be best-effort and never throw in global listeners.
-      });
+      if (refreshInFlight) {
+        return refreshInFlight;
+      }
+
+      refreshInFlight = refresh()
+        .then(() => undefined)
+        .catch(() => {
+          // Keep-alive should be best-effort and never throw in global listeners.
+        })
+        .finally(() => {
+          refreshInFlight = null;
+        });
+
+      return refreshInFlight;
     };
 
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        runRefresh();
+        void runRefresh();
       }
     };
 
-    const intervalId = window.setInterval(runRefresh, intervalMs);
+    const intervalId = window.setInterval(() => {
+      void runRefresh();
+    }, intervalMs);
     document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {

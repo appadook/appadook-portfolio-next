@@ -22,7 +22,16 @@ export function AdminSessionBootstrap() {
       return;
     }
 
-    void auth.client.bootstrapSession();
+    void auth.client
+      .bootstrapSession()
+      .then((result) => {
+        if (!result.ok && result.error.code !== 'missing_refresh_token') {
+          console.error('WAY Auth bootstrap failed:', result.error.message);
+        }
+      })
+      .catch((error) => {
+        console.error('WAY Auth bootstrap threw:', error);
+      });
     const stopKeepAlive = auth.client.startSessionKeepAlive({
       intervalMs: KEEP_ALIVE_INTERVAL_MS,
     });

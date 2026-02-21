@@ -2,7 +2,6 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMutation } from 'convex/react';
-import type { FunctionReference } from 'convex/server';
 import Image from 'next/image';
 import {
   DndContext,
@@ -51,7 +50,19 @@ import { areSameIdOrder, getNextOrder, reconcileDraftOrder, sortByOrder } from '
 import { uploadAssetWithSignedUrl } from '@/features/admin/api/uploadTransport';
 import { useAdminDashboardController } from '@/features/admin/hooks/useAdminDashboardController';
 import { AdminWorkspaceShell } from '@/features/admin/components/AdminWorkspaceShell';
-import type { AdminUser } from '@/features/admin/types';
+import type {
+  AdminEntity,
+  AdminSectionConfig,
+  AdminUser,
+  BootstrapData,
+  EntitySectionId,
+  FieldType,
+  InspectorMode,
+  MediaFieldConfig,
+  SectionId,
+  SelectOption,
+  SiteSettingsEntity,
+} from '@/features/admin/types';
 import { useBreakpoint } from '@/hooks/use-mobile';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -66,47 +77,6 @@ import {
 } from '@/components/ui/drawer';
 import { Progress } from '@/components/ui/progress';
 import { iconRegistryEntries, getRegistryIcon } from '@/data/iconRegistry';
-
-type AdminEntity = {
-  _id: string;
-  order?: number;
-  [key: string]: unknown;
-};
-
-type SiteSettingsEntity = {
-  _id: string;
-  siteName?: string;
-  tagline?: string;
-  logoUrl?: string;
-  profileImageUrl?: string;
-  resumeUrl?: string;
-} | null;
-
-type BootstrapData = {
-  siteSettings: SiteSettingsEntity;
-  experiences: AdminEntity[];
-  projects: AdminEntity[];
-  programmingLanguages: AdminEntity[];
-  technologies: AdminEntity[];
-  cloudProviders: AdminEntity[];
-  certificates: AdminEntity[];
-  aboutCategories: AdminEntity[];
-  aboutItems: AdminEntity[];
-};
-
-export type InspectorMode = 'view' | 'edit' | 'create' | 'deleteConfirm';
-
-type EntitySectionId =
-  | 'experiences'
-  | 'projects'
-  | 'languages'
-  | 'technologies'
-  | 'providers'
-  | 'certificates'
-  | 'about-categories'
-  | 'about-items';
-
-type SectionId = 'site-settings' | EntitySectionId;
 
 type ReorderItem = {
   id: string;
@@ -130,8 +100,6 @@ type TechDraftItem = {
   _isExpanded?: boolean;
 };
 
-type UploadFieldKind = 'image' | 'logo' | 'resumePdf';
-
 type UploadValidationRule = {
   maxBytes: number;
   mimeTypes: string[];
@@ -144,41 +112,7 @@ type UploadResult = {
   fileName: string;
 };
 
-type SelectOption = {
-  label: string;
-  value: string;
-};
-
-type FieldType = 'text' | 'textarea' | 'number' | 'csv' | 'list' | 'select' | 'icon-picker';
-
-type FormFieldConfig = {
-  key: string;
-  label: string;
-  type: FieldType;
-  required?: boolean;
-  options?: SelectOption[];
-};
-
-type MediaFieldConfig = {
-  key: string;
-  label: string;
-  kind: UploadFieldKind;
-  required?: boolean;
-};
-
-export type AdminSectionConfig = {
-  id: EntitySectionId;
-  title: string;
-  description: string;
-  emptyTitle: string;
-  emptyDescription: string;
-  fields: FormFieldConfig[];
-  mediaFields: MediaFieldConfig[];
-  items: AdminEntity[];
-  createMutation: FunctionReference<'mutation'>;
-  updateMutation: FunctionReference<'mutation'>;
-  deleteMutation: FunctionReference<'mutation'>;
-};
+type UploadFieldKind = MediaFieldConfig['kind'];
 
 type LookupContext = {
   aboutCategoryMap: Map<string, AdminEntity>;
@@ -467,6 +401,9 @@ function MediaUploadField({
         });
 
         setProgress(96);
+        await new Promise<void>((resolve) => {
+          window.requestAnimationFrame(() => resolve());
+        });
         setProgress(100);
         setLastFileName(uploaded.fileName);
         onChange(uploaded.url, {
