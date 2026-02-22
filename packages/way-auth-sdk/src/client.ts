@@ -150,6 +150,19 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
   }
 }
 
+function ensureAccessToken(
+  payload: unknown,
+  context: "login" | "signup" | "refresh",
+): asserts payload is { accessToken: string } {
+  if (!payload || typeof payload !== "object" || typeof (payload as { accessToken?: unknown }).accessToken !== "string") {
+    throw new WayAuthApiError(`Auth ${context} response did not include an access token.`, {
+      status: 500,
+      code: "invalid_token",
+      details: payload,
+    });
+  }
+}
+
 export function createWayAuthClient(options: WayAuthClientOptions) {
   const fetchImpl = options.fetch ?? fetch;
   const credentials = options.credentials ?? "include";
@@ -197,18 +210,21 @@ export function createWayAuthClient(options: WayAuthClientOptions) {
   async function signup(input: WayAuthCredentialInput): Promise<WayAuthSignupResponse> {
     const signupHeaders = signupSecret ? { [SIGNUP_SECRET_HEADER]: signupSecret } : undefined;
     const result = await requestAuthJson<WayAuthSignupResponse>("POST", endpoints.signup, input, signupHeaders);
+    ensureAccessToken(result, "signup");
     await setAccessToken(result.accessToken);
     return result;
   }
 
   async function login(input: WayAuthCredentialInput): Promise<WayAuthLoginResponse> {
     const result = await requestAuthJson<WayAuthLoginResponse>("POST", endpoints.login, input);
+    ensureAccessToken(result, "login");
     await setAccessToken(result.accessToken);
     return result;
   }
 
   async function refresh(): Promise<WayAuthRefreshResponse> {
     const result = await requestAuthJson<WayAuthRefreshResponse>("POST", endpoints.refresh);
+    ensureAccessToken(result, "refresh");
     await setAccessToken(result.accessToken);
     return result;
   }

@@ -58,8 +58,10 @@ Factory result:
 - `auth.matcher`
 - `auth.client.login`
 - `auth.client.signup`
+- `auth.client.refresh`
 - `auth.client.logout`
 - `auth.client.bootstrapSession`
+- `auth.client.startSessionKeepAlive`
 - `auth.server.getSession`
 - `auth.server.requireSession`
 - `auth.errors.toUiError`
@@ -79,6 +81,13 @@ const auth = createWayAuthNext({
   },
   hydrationStrategy: "best-effort",
 });
+```
+
+Keep session active in long-lived browser tabs:
+
+```ts
+const stopKeepAlive = auth.client.startSessionKeepAlive({ intervalMs: 5 * 60 * 1000 });
+// call stopKeepAlive() on teardown if needed
 ```
 
 ## Core low-level API
@@ -111,4 +120,4 @@ Common flags:
 
 See:
 
-- `/Users/kurtik/code/public/way-my_auth_service/packages/way-auth-sdk/GUIDE.md`
+- `./GUIDE.md`

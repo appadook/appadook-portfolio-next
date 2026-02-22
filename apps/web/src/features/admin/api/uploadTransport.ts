@@ -1,0 +1,52 @@
+import type { Id } from '@portfolio/backend/convex/_generated/dataModel';
+
+export type UploadedStorageAsset = {
+  storageId: Id<'_storage'>;
+  url: string;
+  fileName: string;
+};
+
+export async function uploadAssetWithSignedUrl(input: {
+  file: File;
+  generateUploadUrl: () => Promise<string>;
+  resolveStorageUrl: (args: { storageId: Id<'_storage'> }) => Promise<string | null>;
+}): Promise<UploadedStorageAsset> {
+  const { file, generateUploadUrl, resolveStorageUrl } = input;
+  const uploadUrl = await generateUploadUrl();
+
+  const uploadResponse = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+  });
+
+  if (!uploadResponse.ok) {
+    throw new Error('Upload failed. Please try again.');
+  }
+
+  const uploadResponseClone = uploadResponse.clone();
+  let payload: { storageId?: string };
+  try {
+    payload = (await uploadResponse.json()) as { storageId?: string };
+  } catch (error) {
+    const rawBody = await uploadResponseClone.text().catch(() => '<unavailable>');
+    const errorMessage = error instanceof Error ? ` ${error.message}` : '';
+    throw new Error(`Upload failed (${uploadResponse.status}). ${rawBody}${errorMessage}`);
+  }
+
+  if (!payload.storageId) {
+    throw new Error('Upload failed. Missing storage id.');
+  }
+
+  const storageId = payload.storageId as Id<'_storage'>;
+  const resolvedUrl = await resolveStorageUrl({ storageId });
+  if (!resolvedUrl) {
+    throw new Error('Unable to resolve uploaded file URL.');
+  }
+
+  return {
+    storageId,
+    url: resolvedUrl,
+    fileName: file.name,
+  };
+}

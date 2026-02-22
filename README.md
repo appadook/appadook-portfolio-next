@@ -1,6 +1,6 @@
 # Portfolio Platform Monorepo
 
-This repository has been migrated to a Turborepo monorepo with:
+This repository is a Turborepo monorepo with:
 
 - Next.js App Router frontend (`apps/web`)
 - Convex backend package (`packages/backend`)
@@ -11,6 +11,18 @@ This repository has been migrated to a Turborepo monorepo with:
 - `apps/web`: Public portfolio site and in-app admin CMS UI.
 - `packages/backend`: App-agnostic Convex schema and function modules.
 - `packages/way-auth-sdk`: Internal workspace copy of `@way/auth-sdk` used by the web app.
+
+## Frontend Architecture (apps/web)
+
+The web app is layered to keep responsibilities explicit:
+
+- `src/app`: route composition, layouts, API route handlers.
+- `src/features/*`: feature-owned UI, hooks, and transport adapters.
+- `src/server/*`: server-only authority (session/env/backend access).
+- `src/lib/*`: cross-feature primitives only.
+- `src/components/ui`: shared design-system primitives.
+
+Reference: `apps/web/ARCHITECTURE.md`.
 
 ## Tech Stack
 
@@ -25,12 +37,18 @@ This repository has been migrated to a Turborepo monorepo with:
 
 - RSC/SSR:
   - Route entry files in `apps/web/src/app/**/page.tsx` are server components by default.
-  - Admin route gating (`/admin`) validates auth via `auth.server.getSession(...)` before rendering.
+  - Admin route gating (`/admin`) validates auth via `src/server/auth/session.ts`.
 - CSR:
-  - Interactive portfolio sections and admin CMS editor are client components.
+  - Interactive portfolio sections and admin CMS editor are feature client components.
   - Convex live data subscriptions (`useQuery`) run in client components for realtime updates.
 - Middleware auth:
   - `apps/web/middleware.ts` re-exports WAY SDK middleware (`auth.middleware`) for `/admin/*`.
+
+## Route Groups and URLs
+
+- `src/app/(public)/page.tsx` maps to `/`.
+- `src/app/(app)/admin/*` maps to `/admin/*`.
+- Route groups organize code only; URL paths remain unchanged.
 
 ## Environment Variables
 
@@ -41,13 +59,15 @@ Create `.env.local` at repository root:
 NEXT_PUBLIC_CONVEX_URL=https://your-deployment.convex.cloud
 
 # WAY Auth
-# Client-facing base URL (required by current Next adapter runtime)
+# Required for browser runtime:
 NEXT_PUBLIC_WAY_AUTH_BASE_URL=https://way-my-auth-service.vercel.app
-# Server/middleware base URL
+# Server-side fallback:
 WAY_AUTH_BASE_URL=https://way-my-auth-service.vercel.app
 
-# Optional: if false, disables fallback content when Convex is empty/unavailable
-NEXT_PUBLIC_ENABLE_CONTENT_FALLBACK=true
+# Important: keep both WAY auth URLs as origin-only values:
+# - no trailing slash
+# - no path/query/hash
+
 ```
 
 ## Local Development
@@ -89,3 +109,8 @@ Admin auth is powered by generated Next SDK integration:
 
 - `apps/web/src/lib/auth.ts` (single `createWayAuthNext()` surface)
 - `apps/web/middleware.ts` (SDK middleware re-export)
+
+## BFF Endpoints
+
+- `GET /api/auth/me`
+- `GET /api/portfolio/snapshot`
