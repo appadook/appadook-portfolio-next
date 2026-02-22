@@ -47,6 +47,16 @@ if (!wayAuthBaseUrl) {
 export const auth = createWayAuthNext({
   baseUrl: wayAuthBaseUrl,
   clientCredentials: "include",
+  // Force same-origin auth transport (BFF/proxy mode) even when discovery
+  // returns absolute upstream URLs.
+  endpoints: {
+    signup: "/api/v1/signup",
+    login: "/api/v1/login",
+    refresh: "/api/v1/refresh",
+    logout: "/api/v1/logout",
+    me: "/api/v1/me",
+    jwks: "/api/v1/jwks",
+  },
 });
 
 export const wayAuthMiddleware = auth.middleware;

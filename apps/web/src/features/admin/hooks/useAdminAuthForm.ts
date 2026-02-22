@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { Route } from 'next';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { auth } from '@/lib/auth';
 
 export type AdminAuthMode = 'login' | 'signup';
 
@@ -24,28 +25,6 @@ function toSafeNextPath(nextPath: string): Route {
   }
 }
 
-type SessionAuthResponse = {
-  error?: {
-    message?: string;
-  };
-};
-
-async function submitSessionCredentials(mode: AdminAuthMode, email: string, password: string): Promise<void> {
-  const response = await fetch('/api/auth/session', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    credentials: 'include',
-    body: JSON.stringify({ mode, email, password }),
-  });
-
-  const payload = (await response.json().catch(() => null)) as SessionAuthResponse | null;
-  if (!response.ok) {
-    throw new Error(payload?.error?.message ?? 'Authentication failed. Please try again.');
-  }
-}
-
 export function useAdminAuthForm(mode: AdminAuthMode) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -64,11 +43,16 @@ export function useAdminAuthForm(mode: AdminAuthMode) {
     setIsSubmitting(true);
 
     try {
-      await submitSessionCredentials(mode, email, password);
+      if (mode === 'login') {
+        await auth.client.login({ email, password });
+      } else {
+        await auth.client.signup({ email, password });
+      }
       router.refresh();
       router.push(safeNextPath);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Authentication failed. Please try again.');
+      const uiError = auth.errors.toUiError(err);
+      setError(uiError.message);
     } finally {
       setIsSubmitting(false);
     }

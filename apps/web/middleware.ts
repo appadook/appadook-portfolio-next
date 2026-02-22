@@ -1,4 +1,4 @@
-import { wayAuthMatcher, wayAuthMiddleware } from "./src/lib/auth";
+import { wayAuthMatcher, wayAuthMiddleware } from './src/lib/auth';
 
 export default wayAuthMiddleware;
 

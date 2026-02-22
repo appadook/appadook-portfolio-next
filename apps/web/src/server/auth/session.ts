@@ -28,6 +28,7 @@ function getRequestOrigin(requestHeaders: Headers): string {
 export async function getAdminSessionFromHeaders(pathname = '/admin'): Promise<SessionResult | null> {
   const requestHeaders = await headers();
   const cookie = requestHeaders.get('cookie') ?? '';
+
   const request = new Request(`${getRequestOrigin(requestHeaders)}${pathname}`, {
     headers: cookie ? { cookie } : undefined,
   });

@@ -1,11 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { auth } from '@/lib/auth';
 
-const KEEP_ALIVE_INTERVAL_MS = 270_000;
+const DEFAULT_KEEP_ALIVE_INTERVAL_MS = 60_000;
+const MIN_KEEP_ALIVE_INTERVAL_MS = 15_000;
 const PUBLIC_ADMIN_PATHS = new Set(['/admin/login', '/admin/signup']);
+
+function resolveKeepAliveIntervalMs(): number {
+  const raw = process.env.NEXT_PUBLIC_WAY_AUTH_KEEP_ALIVE_MS;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < MIN_KEEP_ALIVE_INTERVAL_MS) {
+    return DEFAULT_KEEP_ALIVE_INTERVAL_MS;
+  }
+  return Math.floor(parsed);
+}
 
 function normalizePath(pathname: string): string {
   if (pathname.length > 1 && pathname.endsWith('/')) {
@@ -16,57 +26,31 @@ function normalizePath(pathname: string): string {
 
 export function AdminSessionBootstrap() {
   const pathname = usePathname();
-  const [keepAliveReady, setKeepAliveReady] = useState(false);
+  const hasStartedRef = useRef(false);
+  const normalizedPath = normalizePath(pathname);
+  const keepAliveIntervalMs = resolveKeepAliveIntervalMs();
 
   useEffect(() => {
-    if (PUBLIC_ADMIN_PATHS.has(normalizePath(pathname))) {
-      setKeepAliveReady(false);
+    if (hasStartedRef.current) {
       return;
     }
 
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        const result = await auth.client.bootstrapSession();
-        if (cancelled) {
-          return;
-        }
-
-        if (result.ok) {
-          setKeepAliveReady(true);
-          return;
-        }
-
-        if (result.error.code !== 'missing_refresh_token') {
-          console.error('WAY Auth bootstrap failed:', result.error.message);
-        }
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-        console.error('WAY Auth bootstrap threw:', error);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [pathname]);
-
-  useEffect(() => {
-    if (!keepAliveReady) {
+    if (PUBLIC_ADMIN_PATHS.has(normalizedPath)) {
       return;
     }
+
+    hasStartedRef.current = true;
+    void auth.client.bootstrapSession();
 
     const stopKeepAlive = auth.client.startSessionKeepAlive({
-      intervalMs: KEEP_ALIVE_INTERVAL_MS,
+      intervalMs: keepAliveIntervalMs,
     });
 
     return () => {
+      hasStartedRef.current = false;
       stopKeepAlive();
     };
-  }, [keepAliveReady]);
+  }, [keepAliveIntervalMs, normalizedPath]);
 
   return null;
 }
