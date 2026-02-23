@@ -52,19 +52,21 @@ Reference: `apps/web/ARCHITECTURE.md`.
 
 ## Environment Variables
 
-Create `.env.local` at repository root:
+For the web app, create `apps/web/.env.local` (or use `apps/web/.env.prod` for production values):
 
 ```bash
 # Convex
 NEXT_PUBLIC_CONVEX_URL=https://your-deployment.convex.cloud
 
 # WAY Auth
-# Required for browser runtime:
-NEXT_PUBLIC_WAY_AUTH_BASE_URL=https://way-my-auth-service.vercel.app
-# Server-side fallback:
-WAY_AUTH_BASE_URL=https://way-my-auth-service.vercel.app
+# Required for browser runtime (proxy mode):
+NEXT_PUBLIC_WAY_AUTH_BASE_URL=https://your-app.vercel.app
+# Server-side fallback (same app origin):
+WAY_AUTH_BASE_URL=https://your-app.vercel.app
+# Upstream auth service target used by Next rewrites:
+WAY_AUTH_UPSTREAM_URL=https://way-my-auth-service.vercel.app
 
-# Important: keep both WAY auth URLs as origin-only values:
+# Important: keep all WAY auth URLs as origin-only values:
 # - no trailing slash
 # - no path/query/hash
 
