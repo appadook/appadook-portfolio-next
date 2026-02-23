@@ -6,7 +6,6 @@ import { auth } from '@/lib/auth';
 
 const DEFAULT_KEEP_ALIVE_INTERVAL_MS = 60_000;
 const MIN_KEEP_ALIVE_INTERVAL_MS = 15_000;
-const PUBLIC_ADMIN_PATHS = new Set(['/admin/login', '/admin/signup']);
 
 function resolveKeepAliveIntervalMs(): number {
   const raw = process.env.NEXT_PUBLIC_WAY_AUTH_KEEP_ALIVE_MS;
@@ -35,7 +34,7 @@ export function AdminSessionBootstrap() {
       return;
     }
 
-    if (PUBLIC_ADMIN_PATHS.has(normalizedPath)) {
+    if (auth.client.isPublicAuthRoute(normalizedPath)) {
       return;
     }
 

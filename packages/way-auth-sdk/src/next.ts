@@ -2,9 +2,11 @@ import { createInMemoryTokenStore, createWayAuthClient, type WayAuthClientOption
 import { resolveWayAuthConfig, type ResolveWayAuthConfigOptions } from "./config";
 import { getWayAuthErrorMessage } from "./errors";
 import { createWayAuthGuard, WayAuthTokenVerificationError, type WayAuthVerifiedToken } from "./server";
-import type { WayAuthCredentialInput, WayAuthMeResponse, WayAuthUser } from "./types";
+import type { WayAuthCredentialInput, WayAuthEndpoints, WayAuthMeResponse, WayAuthUser } from "./types";
 
 type HydrationStrategy = "best-effort" | "required";
+type WayAuthTransportMode = "direct" | "proxy";
+type WayAuthEndpointOriginGuard = "off" | "warn" | "error";
 
 export type WayAuthUiError = {
   message: string;
@@ -45,6 +47,9 @@ export type WayAuthNextOptions = ResolveWayAuthConfigOptions & {
   accessTokenCookieName?: string;
   clientCredentials?: RequestCredentials;
   clientAutoRefresh?: boolean;
+  transportMode?: WayAuthTransportMode;
+  endpointOriginGuard?: WayAuthEndpointOriginGuard;
+  transportEndpoints?: Partial<Pick<WayAuthEndpoints, "signup" | "login" | "refresh" | "logout" | "me">>;
   signupSecret?: string;
   middleware?: Partial<WayAuthNextMiddlewareOptions>;
   hydrationStrategy?: HydrationStrategy;
@@ -63,6 +68,20 @@ export type WayAuthBootstrapResult =
 
 const DEFAULT_ACCESS_TOKEN_COOKIE_NAME = "way_access_token";
 const DEFAULT_ACCESS_TOKEN_COOKIE_MAX_AGE_SECONDS = 15 * 60;
+const DEFAULT_TRANSPORT_MODE: WayAuthTransportMode = "direct";
+const DEFAULT_ENDPOINT_ORIGIN_GUARD: WayAuthEndpointOriginGuard = "warn";
+const DEFAULT_PROXY_TRANSPORT_ENDPOINTS: Pick<
+  WayAuthEndpoints,
+  "signup" | "login" | "refresh" | "logout" | "me"
+> = {
+  signup: "/api/v1/signup",
+  login: "/api/v1/login",
+  refresh: "/api/v1/refresh",
+  logout: "/api/v1/logout",
+  me: "/api/v1/me",
+};
+const KEEP_ALIVE_MIN_INTERVAL_MS = 60_000;
+const KEEP_ALIVE_MAX_INTERVAL_MS = 4 * 60_000;
 const DEFAULT_MIDDLEWARE_OPTIONS: WayAuthNextMiddlewareOptions = {
   adminPrefix: "/admin",
   publicPaths: ["/admin/login", "/admin/signup"],
@@ -70,13 +89,6 @@ const DEFAULT_MIDDLEWARE_OPTIONS: WayAuthNextMiddlewareOptions = {
   postLoginPath: "/admin",
   nextParamName: "next",
 };
-
-function getAccessTokenCookieMaxAgeSeconds(result?: { expiresIn?: unknown }): number {
-  if (typeof result?.expiresIn === "number" && Number.isFinite(result.expiresIn) && result.expiresIn > 0) {
-    return Math.floor(result.expiresIn);
-  }
-  return DEFAULT_ACCESS_TOKEN_COOKIE_MAX_AGE_SECONDS;
-}
 
 function normalizePath(path: string): string {
   const trimmed = path.trim();
@@ -198,15 +210,6 @@ function toUiError(error: unknown): WayAuthUiError {
   };
 }
 
-function getErrorCode(error: unknown): string | null {
-  if (!error || typeof error !== "object") {
-    return null;
-  }
-
-  const candidate = error as { code?: unknown };
-  return typeof candidate.code === "string" ? candidate.code : null;
-}
-
 function isWithinAdminPrefix(pathname: string, adminPrefix: string): boolean {
   return pathname === adminPrefix || pathname.startsWith(`${adminPrefix}/`);
 }
@@ -243,9 +246,55 @@ function resolveMiddlewareOptions(
   };
 }
 
+function normalizeComparableOrigin(value: string): string | null {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
+function detectEndpointOriginMismatches(
+  baseUrl: string,
+  endpoints: WayAuthEndpoints,
+): Array<{ endpoint: keyof WayAuthEndpoints; origin: string }> {
+  const baseOrigin = normalizeComparableOrigin(baseUrl);
+  if (!baseOrigin) {
+    return [];
+  }
+
+  const mismatches: Array<{ endpoint: keyof WayAuthEndpoints; origin: string }> = [];
+  const entries = Object.entries(endpoints) as Array<[keyof WayAuthEndpoints, string]>;
+  for (const [endpoint, value] of entries) {
+    const endpointOrigin = normalizeComparableOrigin(value);
+    if (!endpointOrigin || endpointOrigin === baseOrigin) {
+      continue;
+    }
+    mismatches.push({ endpoint, origin: endpointOrigin });
+  }
+
+  return mismatches;
+}
+
+function buildProxyTransportEndpoints(
+  overrides: WayAuthNextOptions["transportEndpoints"],
+): Pick<WayAuthEndpoints, "signup" | "login" | "refresh" | "logout" | "me"> {
+  return {
+    ...DEFAULT_PROXY_TRANSPORT_ENDPOINTS,
+    ...(overrides ?? {}),
+  };
+}
+
+function resolveAdaptiveKeepAliveIntervalMs(accessTokenTtlSeconds: number): number {
+  const derived = Math.floor((accessTokenTtlSeconds * 1_000) / 2);
+  return Math.max(KEEP_ALIVE_MIN_INTERVAL_MS, Math.min(KEEP_ALIVE_MAX_INTERVAL_MS, derived));
+}
+
 export function createWayAuthNext(options: WayAuthNextOptions = {}) {
   const fetchImpl = options.fetch ?? fetch;
   const accessTokenCookieName = options.accessTokenCookieName ?? DEFAULT_ACCESS_TOKEN_COOKIE_NAME;
+  const transportMode = options.transportMode ?? DEFAULT_TRANSPORT_MODE;
+  const endpointOriginGuard = options.endpointOriginGuard ?? DEFAULT_ENDPOINT_ORIGIN_GUARD;
   const middlewareOptions = resolveMiddlewareOptions(options);
   const defaultHydrationStrategy = options.hydrationStrategy ?? "best-effort";
   const tokenStore = createInMemoryTokenStore();
@@ -258,18 +307,74 @@ export function createWayAuthNext(options: WayAuthNextOptions = {}) {
 
   let clientPromise: Promise<ReturnType<typeof createWayAuthClient>> | null = null;
   let guardPromise: Promise<ReturnType<typeof createWayAuthGuard>> | null = null;
+  let runtimeConfigPromise:
+    | Promise<{
+        resolved: Awaited<typeof resolvedConfigPromise>;
+        clientEndpoints: Pick<WayAuthEndpoints, "signup" | "login" | "refresh" | "logout" | "me">;
+      }>
+    | null = null;
+  let hasWarnedOnEndpointOriginMismatch = false;
+
+  async function getRuntimeConfig() {
+    if (!runtimeConfigPromise) {
+      runtimeConfigPromise = (async () => {
+        const resolved = await resolvedConfigPromise;
+        const mismatches = detectEndpointOriginMismatches(resolved.baseUrl, resolved.endpoints);
+        if (endpointOriginGuard !== "off" && mismatches.length > 0) {
+          const mismatchDescription = mismatches.map((item) => `${item.endpoint}:${item.origin}`).join(", ");
+          const message =
+            `WAY Auth endpoints resolved to origin(s) different from baseUrl origin. ` +
+            `This can break cookie-backed refresh in proxy deployments. ` +
+            `baseUrl=${resolved.baseUrl}; mismatches=[${mismatchDescription}]`;
+
+          if (endpointOriginGuard === "error") {
+            throw new Error(message);
+          }
+
+          if (!hasWarnedOnEndpointOriginMismatch) {
+            hasWarnedOnEndpointOriginMismatch = true;
+            console.warn(message);
+          }
+        }
+
+        const resolvedClientEndpoints: Pick<WayAuthEndpoints, "signup" | "login" | "refresh" | "logout" | "me"> = {
+          signup: resolved.endpoints.signup,
+          login: resolved.endpoints.login,
+          refresh: resolved.endpoints.refresh,
+          logout: resolved.endpoints.logout,
+          me: resolved.endpoints.me,
+        };
+
+        const clientEndpoints =
+          transportMode === "proxy"
+            ? buildProxyTransportEndpoints(options.transportEndpoints)
+            : {
+                ...resolvedClientEndpoints,
+                ...(options.transportEndpoints ?? {}),
+              };
+
+        return {
+          resolved,
+          clientEndpoints,
+        };
+      })();
+    }
+
+    return runtimeConfigPromise;
+  }
 
   async function getClient() {
     if (!clientPromise) {
       clientPromise = (async () => {
-        const resolved = await resolvedConfigPromise;
+        const runtimeConfig = await getRuntimeConfig();
+        const resolved = runtimeConfig.resolved;
         const clientOptions: WayAuthClientOptions = {
           baseUrl: resolved.baseUrl,
           fetch: fetchImpl,
           credentials: options.clientCredentials ?? "include",
           autoRefresh: options.clientAutoRefresh ?? true,
           tokenStore,
-          endpoints: resolved.endpoints,
+          endpoints: runtimeConfig.clientEndpoints,
           signupSecret: options.signupSecret,
         };
         return createWayAuthClient(clientOptions);
@@ -282,7 +387,8 @@ export function createWayAuthNext(options: WayAuthNextOptions = {}) {
   async function getGuard() {
     if (!guardPromise) {
       guardPromise = (async () => {
-        const resolved = await resolvedConfigPromise;
+        const runtimeConfig = await getRuntimeConfig();
+        const resolved = runtimeConfig.resolved;
         return createWayAuthGuard({
           jwksUrl: resolved.jwksUrl,
           issuer: resolved.issuer,
@@ -305,26 +411,10 @@ export function createWayAuthNext(options: WayAuthNextOptions = {}) {
     clearAccessTokenCookie(accessTokenCookieName);
   }
 
-  async function hydrateAccessTokenStoreFromCookie() {
-    if (typeof document === "undefined") {
-      return;
-    }
-
-    const tokenInStore = await tokenStore.getAccessToken();
-    if (tokenInStore) {
-      return;
-    }
-
-    const tokenFromCookie = parseCookieValue(document.cookie, accessTokenCookieName);
-    if (tokenFromCookie) {
-      await tokenStore.setAccessToken(tokenFromCookie);
-    }
-  }
-
   async function fetchUserFromMe(accessToken: string): Promise<WayAuthUser | null> {
-    const resolved = await resolvedConfigPromise;
+    const runtimeConfig = await getRuntimeConfig();
     try {
-      const response = await fetchImpl(resolved.endpoints.me, {
+      const response = await fetchImpl(runtimeConfig.clientEndpoints.me, {
         method: "GET",
         headers: {
           authorization: `Bearer ${accessToken}`,
@@ -352,35 +442,11 @@ export function createWayAuthNext(options: WayAuthNextOptions = {}) {
       return null;
     }
 
-    let claims: WayAuthVerifiedToken | null = null;
+    let claims: WayAuthVerifiedToken;
     try {
       claims = await (await getGuard()).verifyAccessToken(accessToken);
-    } catch (error) {
-      if (!(error instanceof WayAuthTokenVerificationError)) {
-        throw error;
-      }
-
-      const meUser = await fetchUserFromMe(accessToken);
-      if (!meUser) {
-        return null;
-      }
-
-      console.warn(
-        "WAY Auth token verification failed; using /me fallback. Check issuer/audience/JWKS discovery settings.",
-        error,
-      );
-
-      return {
-        accessToken,
-        claims: {
-          sub: meUser.id,
-        },
-        user: {
-          id: meUser.id,
-          email: meUser.email,
-        },
-        source: "me",
-      };
+    } catch {
+      return null;
     }
 
     if (sessionOptions.skipUserHydration) {
@@ -476,7 +542,10 @@ export function createWayAuthNext(options: WayAuthNextOptions = {}) {
   async function login(input: WayAuthCredentialInput) {
     const client = await getClient();
     const result = await client.login(input);
-    accessTokenCookieMaxAgeSeconds = getAccessTokenCookieMaxAgeSeconds(result);
+    accessTokenCookieMaxAgeSeconds =
+      typeof result.expiresIn === "number" && Number.isFinite(result.expiresIn) && result.expiresIn > 0
+        ? Math.floor(result.expiresIn)
+        : DEFAULT_ACCESS_TOKEN_COOKIE_MAX_AGE_SECONDS;
     await syncAccessTokenCookieFromStore();
     return result;
   }
@@ -484,7 +553,10 @@ export function createWayAuthNext(options: WayAuthNextOptions = {}) {
   async function signup(input: WayAuthCredentialInput) {
     const client = await getClient();
     const result = await client.signup(input);
-    accessTokenCookieMaxAgeSeconds = getAccessTokenCookieMaxAgeSeconds(result);
+    accessTokenCookieMaxAgeSeconds =
+      typeof result.expiresIn === "number" && Number.isFinite(result.expiresIn) && result.expiresIn > 0
+        ? Math.floor(result.expiresIn)
+        : DEFAULT_ACCESS_TOKEN_COOKIE_MAX_AGE_SECONDS;
     await syncAccessTokenCookieFromStore();
     return result;
   }
@@ -492,7 +564,10 @@ export function createWayAuthNext(options: WayAuthNextOptions = {}) {
   async function refresh() {
     const client = await getClient();
     const result = await client.refresh();
-    accessTokenCookieMaxAgeSeconds = getAccessTokenCookieMaxAgeSeconds(result);
+    accessTokenCookieMaxAgeSeconds =
+      typeof result.expiresIn === "number" && Number.isFinite(result.expiresIn) && result.expiresIn > 0
+        ? Math.floor(result.expiresIn)
+        : DEFAULT_ACCESS_TOKEN_COOKIE_MAX_AGE_SECONDS;
     await syncAccessTokenCookieFromStore();
     return result;
   }
@@ -506,11 +581,12 @@ export function createWayAuthNext(options: WayAuthNextOptions = {}) {
 
   async function bootstrapSession(): Promise<WayAuthBootstrapResult> {
     const client = await getClient();
-    await hydrateAccessTokenStoreFromCookie();
-
     try {
       const refreshed = await client.refresh();
-      accessTokenCookieMaxAgeSeconds = getAccessTokenCookieMaxAgeSeconds(refreshed);
+      accessTokenCookieMaxAgeSeconds =
+        typeof refreshed.expiresIn === "number" && Number.isFinite(refreshed.expiresIn) && refreshed.expiresIn > 0
+          ? Math.floor(refreshed.expiresIn)
+          : DEFAULT_ACCESS_TOKEN_COOKIE_MAX_AGE_SECONDS;
       const me = await client.me();
       await syncAccessTokenCookieFromStore();
       return {
@@ -519,65 +595,39 @@ export function createWayAuthNext(options: WayAuthNextOptions = {}) {
         sessionId: me.sessionId,
       };
     } catch (error) {
-      let bootstrapError: unknown = error;
-      if (getErrorCode(error) === "missing_refresh_token") {
-        try {
-          const me = await client.me();
-          await syncAccessTokenCookieFromStore();
-          return {
-            ok: true,
-            user: me.user,
-            sessionId: me.sessionId,
-          };
-        } catch (meError) {
-          bootstrapError = meError;
-          // Fall through to standard failure handling below.
-        }
-      }
-
       await client.clearAccessToken();
       clearAccessTokenCookie(accessTokenCookieName);
       return {
         ok: false,
-        error: toUiError(bootstrapError),
+        error: toUiError(error),
       };
     }
   }
 
-  function startSessionKeepAlive(keepAliveOptions: { intervalMs?: number } = {}) {
+  function isPublicAuthRoute(pathname: string): boolean {
+    return middlewareOptions.publicPaths.includes(normalizePath(pathname));
+  }
+
+  function startSessionKeepAlive(options: { intervalMs?: number } = {}) {
     if (typeof window === "undefined" || typeof document === "undefined") {
       return () => {};
     }
 
-    const intervalMs = keepAliveOptions.intervalMs ?? 5 * 60 * 1_000;
-    let refreshInFlight: Promise<void> | null = null;
+    const intervalMs = options.intervalMs ?? resolveAdaptiveKeepAliveIntervalMs(accessTokenCookieMaxAgeSeconds);
 
     const runRefresh = () => {
-      if (refreshInFlight) {
-        return refreshInFlight;
-      }
-
-      refreshInFlight = refresh()
-        .then(() => undefined)
-        .catch(() => {
-          // Keep-alive should be best-effort and never throw in global listeners.
-        })
-        .finally(() => {
-          refreshInFlight = null;
-        });
-
-      return refreshInFlight;
+      void refresh().catch(() => {
+        // Keep-alive should be best-effort and never throw in global listeners.
+      });
     };
 
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        void runRefresh();
+        runRefresh();
       }
     };
 
-    const intervalId = window.setInterval(() => {
-      void runRefresh();
-    }, intervalMs);
+    const intervalId = window.setInterval(runRefresh, intervalMs);
     document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
@@ -595,6 +645,7 @@ export function createWayAuthNext(options: WayAuthNextOptions = {}) {
       refresh,
       logout,
       bootstrapSession,
+      isPublicAuthRoute,
       startSessionKeepAlive,
     },
     server: {
