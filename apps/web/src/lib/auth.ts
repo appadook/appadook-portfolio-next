@@ -65,18 +65,39 @@ function resolveWayAuthBaseUrl(): string {
   );
 }
 
-const wayAuthBaseUrl = resolveWayAuthBaseUrl();
 const wayAuthUpstreamUrl = normalizeOptionalBaseUrl(process.env.WAY_AUTH_UPSTREAM_URL, "WAY_AUTH_UPSTREAM_URL");
+const wayAuthPublicSiteUrl = normalizeOptionalBaseUrl(process.env.NEXT_PUBLIC_SITE_URL, "NEXT_PUBLIC_SITE_URL");
+const vercelUrl = normalizeOptionalBaseUrl(
+  process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined,
+  "VERCEL_URL",
+);
+
+function resolveProxySafeBaseUrl(): string {
+  const resolved = resolveWayAuthBaseUrl();
+  if (!wayAuthUpstreamUrl || resolved !== wayAuthUpstreamUrl) {
+    return resolved;
+  }
+
+  const fallback = wayAuthPublicSiteUrl ?? vercelUrl;
+  if (fallback && fallback !== wayAuthUpstreamUrl) {
+    console.warn(
+      "WAY Auth proxy config warning: base URL matched WAY_AUTH_UPSTREAM_URL; falling back to site origin for proxy mode.",
+    );
+    return fallback;
+  }
+
+  console.warn(
+    "WAY Auth proxy config warning: WAY_AUTH_BASE_URL/NEXT_PUBLIC_WAY_AUTH_BASE_URL match WAY_AUTH_UPSTREAM_URL. " +
+      "Set both base-url env vars to app origin to avoid cross-origin refresh cookie issues.",
+  );
+  return resolved;
+}
+
+const wayAuthBaseUrl = resolveProxySafeBaseUrl();
 
 if (!wayAuthBaseUrl) {
   throw new Error(
     "WAY Auth base URL is required. Set WAY_AUTH_BASE_URL (server) and NEXT_PUBLIC_WAY_AUTH_BASE_URL (browser).",
-  );
-}
-
-if (wayAuthUpstreamUrl && wayAuthBaseUrl === wayAuthUpstreamUrl) {
-  throw new Error(
-    "Invalid WAY Auth proxy configuration: WAY_AUTH_BASE_URL/NEXT_PUBLIC_WAY_AUTH_BASE_URL must be your app origin, not WAY_AUTH_UPSTREAM_URL.",
   );
 }
 
