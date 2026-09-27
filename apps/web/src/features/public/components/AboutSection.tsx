@@ -5,7 +5,7 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import AnimatedSection from "./AnimatedSection";
-import { getAboutIcon } from "@/features/public/lib/aboutIcons";
+import { aboutIconMap } from "@/features/public/lib/aboutIcons";
 import type {
   AboutCategory,
   AboutItem as AboutItemType,
@@ -113,7 +113,7 @@ const AboutSection = ({ categories, items }: AboutSectionProps) => {
               All
             </motion.button>
             {categories?.map((category, index) => {
-              const CategoryIcon = getAboutIcon(category.icon);
+              const CategoryIcon = (aboutIconMap[category.icon] ?? aboutIconMap.Circle);
               return (
                 <motion.button
                   key={category._id}
@@ -195,7 +195,7 @@ function GridCard({
   item: AboutItemType;
   index: number;
 }) {
-  const Icon = getAboutIcon(item.icon);
+  const Icon = (aboutIconMap[item.icon] ?? aboutIconMap.Circle);
   const [hovered, setHovered] = useState(false);
 
   return (

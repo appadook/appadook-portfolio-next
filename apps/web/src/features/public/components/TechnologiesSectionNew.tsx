@@ -11,7 +11,7 @@ import AnimatedSection from './AnimatedSection';
 import type { Technology, CloudProvider, Certificate } from '@/features/public/types';
 import { useBreakpoint } from '@/hooks/use-mobile';
 import { technologyIcons, cloudProviderIcons } from '@/features/public/lib/technologyIcons';
-import { getRegistryIcon } from '@/data/iconRegistry';
+import { getRegistryIcon, iconRegistry } from '@/data/iconRegistry';
 
 /* ─── Helpers ──────────────────────────────────────────────────────────────── */
 
@@ -51,7 +51,7 @@ const ProviderCard = ({
   onToggle: () => void;
   onCertClick: (cert: Certificate, name: string) => void;
 }) => {
-  const CpIcon = getRegistryIcon(provider.iconName) ?? cloudProviderIcons[provider.name] ?? Cloud;
+  const CpIcon = iconRegistry[provider.iconName ?? ""] ?? cloudProviderIcons[provider.name] ?? Cloud;
   const certCount = provider.certificates?.length || 0;
 
   return (

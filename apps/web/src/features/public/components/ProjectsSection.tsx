@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useMemo, useCallback, useEffect } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
@@ -122,10 +124,11 @@ const ProjectsSection = ({ projects }: { projects: Project[] }) => {
   
   useEffect(() => {
     if (!emblaApi) return;
-    onSelect();
+    const frame = requestAnimationFrame(onSelect);
     emblaApi.on("select", onSelect);
     emblaApi.on("reInit", onSelect);
     return () => {
+      cancelAnimationFrame(frame);
       emblaApi.off("select", onSelect);
       emblaApi.off("reInit", onSelect);
     };
@@ -218,6 +221,7 @@ const ProjectsSection = ({ projects }: { projects: Project[] }) => {
             <motion.button
               key={category}
               onClick={() => setSelectedCategory(category)}
+              aria-pressed={selectedCategory === category}
               className={`px-3 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-300 whitespace-nowrap flex-shrink-0 ${
                 selectedCategory === category
                   ? "bg-primary text-primary-foreground"

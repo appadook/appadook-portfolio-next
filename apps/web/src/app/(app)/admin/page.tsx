@@ -1,18 +1,19 @@
-import { AdminProviders } from '@/app/(app)/admin/providers';
+import { AdminProviders } from './providers';
 import AdminDashboard from '@/features/admin/components/AdminDashboard';
-import { requireAdminSessionOrRedirect } from '@/server/auth/session';
-
+import {
+  getAuthServer,
+  requireAdminSessionOrRedirect,
+} from '@/server/auth/session';
+import { api } from '@portfolio/backend/convex/_generated/api';
 export default async function AdminPage() {
-  const session = await requireAdminSessionOrRedirect();
-
+  const { user } = await requireAdminSessionOrRedirect();
+  const [initialToken, initialData] = await Promise.all([
+    getAuthServer().getToken(),
+    getAuthServer().fetchAuthQuery(api.admin.getAdminBootstrap, {}),
+  ]);
   return (
-    <AdminProviders>
-      <AdminDashboard
-        user={{
-          id: session.user.id,
-          email: session.user.email,
-        }}
-      />
+    <AdminProviders initialToken={initialToken}>
+      <AdminDashboard user={user} initialData={initialData} />
     </AdminProviders>
   );
 }

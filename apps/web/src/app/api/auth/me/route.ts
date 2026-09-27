@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const session = await getAdminSessionFromHeaders('/api/auth/me');
+    const session = await getAdminSessionFromHeaders();
     if (!session) {
       return NextResponse.json(
         { error: 'Unauthorized' },

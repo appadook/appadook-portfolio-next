@@ -11,13 +11,18 @@
     },
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "dist/**"]
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
     "lint": {
       "dependsOn": ["^lint"]
     },
     "typecheck": {
-      "dependsOn": ["^typecheck"]
+      "dependsOn": ["^build", "^typecheck"]
+    },
+    "test": {
+      "dependsOn": ["^test"],
+      "outputs": []
     }
-  }
+  },
+  "globalEnv": ["NEXT_PUBLIC_*", "CONTACT_INGEST_SECRET", "REVALIDATE_SECRET"]
 }

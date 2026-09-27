@@ -5,9 +5,20 @@
     "dev": "convex dev",
     "deploy": "convex deploy",
     "codegen": "convex codegen",
-    "seed:portfolio": "bun run ./scripts/seedPortfolioBase.ts"
+    "seed:portfolio": "bun run ./scripts/seedPortfolioBase.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
-    "convex": "^1.17.4"
+    "convex": "1.46.0",
+    "@convex-dev/better-auth": "0.12.5",
+    "better-auth": "1.6.33"
+  },
+  "devDependencies": {
+    "convex-test": "0.0.59",
+    "vitest": "^4.1.11",
+    "typescript": "^5.9.3",
+    "@types/node": "^22.5.5",
+    "vite": "^7.3.1"
   }
 }

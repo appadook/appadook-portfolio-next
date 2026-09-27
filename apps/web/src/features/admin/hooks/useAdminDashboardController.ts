@@ -1,13 +1,14 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useMutation, useQuery } from 'convex/react';
+import { useAction, useMutation, useQuery } from 'convex/react';
 import { adminApi } from '@/features/admin/api/convexAdmin';
 
-export function useAdminDashboardController() {
-  const bootstrap = useQuery(adminApi.getAdminBootstrap);
+import type { BootstrapData } from '../types';
+export function useAdminDashboardController(initialData: BootstrapData) {
+  const bootstrap = useQuery(adminApi.getAdminBootstrap) ?? initialData;
   const generateUploadUrl = useMutation(adminApi.generateUploadUrl);
-  const resolveStorageUrl = useMutation(adminApi.resolveStorageUrl);
+  const resolveStorageUrl = useAction(adminApi.resolveStorageUrl);
   const reorderExperiences = useMutation(adminApi.reorderExperiences);
   const reorderProjects = useMutation(adminApi.reorderProjects);
   const batchSaveTechnologies = useMutation(adminApi.batchSaveTechnologies);
@@ -21,6 +22,13 @@ export function useAdminDashboardController() {
       reorderProjects,
       batchSaveTechnologies,
     }),
-    [bootstrap, batchSaveTechnologies, generateUploadUrl, reorderExperiences, reorderProjects, resolveStorageUrl],
+    [
+      bootstrap,
+      batchSaveTechnologies,
+      generateUploadUrl,
+      reorderExperiences,
+      reorderProjects,
+      resolveStorageUrl,
+    ],
   );
 }

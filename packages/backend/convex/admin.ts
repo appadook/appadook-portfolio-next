@@ -1,5 +1,9 @@
-import { v } from 'convex/values';
-import { mutation, query } from './_generated/server';
+import { v } from "convex/values";
+import { mutation, query, action, internalMutation } from "./_generated/server";
+import { requireOwner } from "./lib/owner";
+import { prepareWrite, contentPatch } from "./lib/write";
+import { internal } from "./_generated/api";
+import { validateAsset } from "./lib/validation";
 
 const experienceFields = {
   company: v.string(),
@@ -20,7 +24,7 @@ const projectFields = {
   categories: v.array(v.string()),
   techStack: v.array(v.string()),
   status: v.optional(
-    v.union(v.literal('new'), v.literal('active'), v.literal('deprecated')),
+    v.union(v.literal("new"), v.literal("active"), v.literal("deprecated")),
   ),
   githubUrl: v.optional(v.string()),
   liveUrl: v.optional(v.string()),
@@ -35,7 +39,11 @@ const projectFields = {
 
 const programmingLanguageFields = {
   name: v.string(),
-  level: v.union(v.literal('expert'), v.literal('advanced'), v.literal('intermediate')),
+  level: v.union(
+    v.literal("expert"),
+    v.literal("advanced"),
+    v.literal("intermediate"),
+  ),
   description: v.string(),
   logoUrl: v.optional(v.string()),
   order: v.number(),
@@ -59,7 +67,7 @@ const cloudProviderFields = {
 
 const certificateFields = {
   name: v.string(),
-  providerId: v.id('cloudProviders'),
+  providerId: v.id("cloudProviders"),
   image: v.string(),
   year: v.string(),
   description: v.optional(v.string()),
@@ -79,7 +87,7 @@ const aboutCategoryFields = {
 };
 
 const aboutItemFields = {
-  categoryId: v.id('aboutCategories'),
+  categoryId: v.id("aboutCategories"),
   title: v.string(),
   subtitle: v.optional(v.string()),
   description: v.optional(v.string()),
@@ -93,6 +101,7 @@ const aboutItemFields = {
 export const getAdminBootstrap = query({
   args: {},
   handler: async (ctx) => {
+    await requireOwner(ctx);
     const [
       siteSettings,
       experiences,
@@ -105,17 +114,17 @@ export const getAdminBootstrap = query({
       aboutItems,
     ] = await Promise.all([
       ctx.db
-        .query('siteSettings')
-        .withIndex('by_key', (q) => q.eq('key', 'global'))
+        .query("siteSettings")
+        .withIndex("by_key", (q) => q.eq("key", "global"))
         .unique(),
-      ctx.db.query('experiences').collect(),
-      ctx.db.query('projects').collect(),
-      ctx.db.query('programmingLanguages').collect(),
-      ctx.db.query('technologies').collect(),
-      ctx.db.query('cloudProviders').collect(),
-      ctx.db.query('certificates').collect(),
-      ctx.db.query('aboutCategories').collect(),
-      ctx.db.query('aboutItems').collect(),
+      ctx.db.query("experiences").collect(),
+      ctx.db.query("projects").collect(),
+      ctx.db.query("programmingLanguages").collect(),
+      ctx.db.query("technologies").collect(),
+      ctx.db.query("cloudProviders").collect(),
+      ctx.db.query("certificates").collect(),
+      ctx.db.query("aboutCategories").collect(),
+      ctx.db.query("aboutItems").collect(),
     ]);
 
     return {
@@ -135,19 +144,64 @@ export const getAdminBootstrap = query({
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireOwner(ctx);
     return await ctx.storage.generateUploadUrl();
   },
 });
 
-export const resolveStorageUrl = mutation({
-  args: { storageId: v.id('_storage') },
-  handler: async (ctx, args) => {
-    return await ctx.storage.getUrl(args.storageId);
+export const resolveStorageUrl = action({
+  args: { storageId: v.id("_storage"), fileName: v.optional(v.string()) },
+  handler: async (ctx, { storageId, fileName }): Promise<string | null> => {
+    await requireOwner(ctx);
+    const file = await ctx.storage.get(storageId);
+    if (!file) throw new Error("Uploaded file was not found.");
+    try {
+      validateAsset(file.type, file.size);
+      const bytes = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+      const text = new TextDecoder().decode(bytes);
+      const valid =
+        file.type === "application/pdf"
+          ? text.startsWith("%PDF-")
+          : file.type === "image/png"
+            ? bytes[0] === 137 && text.slice(1, 4) === "PNG"
+            : file.type === "image/jpeg"
+              ? bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
+              : text.startsWith("RIFF") && text.slice(8, 12) === "WEBP";
+      if (!valid)
+        throw new Error("The uploaded file does not match its file type.");
+    } catch (error) {
+      await ctx.storage.delete(storageId);
+      throw error;
+    }
+    return ctx.runMutation(internal.admin.attachAsset, {
+      storageId,
+      fileName: fileName?.slice(0, 200),
+    });
+  },
+});
+export const attachAsset = internalMutation({
+  args: { storageId: v.id("_storage"), fileName: v.optional(v.string()) },
+  handler: async (ctx, { storageId, fileName }) => {
+    await requireOwner(ctx);
+    const url = await ctx.storage.getUrl(storageId);
+    const existing = await ctx.db
+      .query("assets")
+      .withIndex("by_storage", (q) => q.eq("storageId", storageId))
+      .unique();
+    if (url && !existing)
+      await ctx.db.insert("assets", {
+        storageId,
+        url,
+        fileName,
+        createdAt: Date.now(),
+      });
+    return url;
   },
 });
 
 export const upsertSiteSettings = mutation({
   args: {
+    expectedRevision: v.number(),
     siteName: v.optional(v.string()),
     tagline: v.optional(v.string()),
     logoUrl: v.optional(v.string()),
@@ -155,13 +209,14 @@ export const upsertSiteSettings = mutation({
     resumeUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
     const existing = await ctx.db
-      .query('siteSettings')
-      .withIndex('by_key', (q) => q.eq('key', 'global'))
+      .query("siteSettings")
+      .withIndex("by_key", (q) => q.eq("key", "global"))
       .unique();
 
     const payload = {
-      key: 'global',
+      key: "global",
       siteName: args.siteName,
       tagline: args.tagline,
       logoUrl: args.logoUrl,
@@ -175,67 +230,101 @@ export const upsertSiteSettings = mutation({
       return existing._id;
     }
 
-    return await ctx.db.insert('siteSettings', payload);
+    return await ctx.db.insert("siteSettings", payload);
   },
 });
 
 export const createExperience = mutation({
   args: experienceFields,
-  handler: async (ctx, args) => await ctx.db.insert('experiences', args),
+  handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
+    return await ctx.db.insert("experiences", args);
+  },
 });
 
 export const updateExperience = mutation({
-  args: { id: v.id('experiences'), ...experienceFields },
-  handler: async (ctx, { id, ...rest }) => {
-    await ctx.db.patch(id, rest);
+  args: {
+    clearFields: v.optional(v.array(v.string())),
+    expectedVersion: v.number(),
+    id: v.id("experiences"),
+    ...experienceFields,
+  },
+  handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
+    const {
+      id,
+      expectedVersion: _expectedVersion,
+      clearFields,
+      ...rest
+    } = args;
+    await ctx.db.patch(id, contentPatch(rest, experienceFields, clearFields));
     return id;
   },
 });
 
 export const deleteExperience = mutation({
-  args: { id: v.id('experiences') },
+  args: { expectedVersion: v.number(), id: v.id("experiences") },
   handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
     await ctx.db.delete(args.id);
   },
 });
 
 export const createProject = mutation({
   args: projectFields,
-  handler: async (ctx, args) => await ctx.db.insert('projects', args),
+  handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
+    return await ctx.db.insert("projects", args);
+  },
 });
 
 export const updateProject = mutation({
-  args: { id: v.id('projects'), ...projectFields },
-  handler: async (ctx, { id, ...rest }) => {
-    await ctx.db.patch(id, rest);
+  args: {
+    clearFields: v.optional(v.array(v.string())),
+    expectedVersion: v.number(),
+    id: v.id("projects"),
+    ...projectFields,
+  },
+  handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
+    const {
+      id,
+      expectedVersion: _expectedVersion,
+      clearFields,
+      ...rest
+    } = args;
+    await ctx.db.patch(id, contentPatch(rest, projectFields, clearFields));
     return id;
   },
 });
 
 export const deleteProject = mutation({
-  args: { id: v.id('projects') },
+  args: { expectedVersion: v.number(), id: v.id("projects") },
   handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
     await ctx.db.delete(args.id);
   },
 });
 
 export const reorderProjects = mutation({
   args: {
+    expectedRevision: v.number(),
     items: v.array(
       v.object({
-        id: v.id('projects'),
+        id: v.id("projects"),
         order: v.number(),
       }),
     ),
   },
   handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
     const now = Date.now();
     const payload = args.items;
 
     if (payload.length === 0) {
-      const existingProjects = await ctx.db.query('projects').take(1);
+      const existingProjects = await ctx.db.query("projects").take(1);
       if (existingProjects.length > 0) {
-        throw new Error('Reorder payload must include all existing projects.');
+        throw new Error("Reorder payload must include all existing projects.");
       }
       return { updatedCount: 0, updatedAt: now };
     }
@@ -250,17 +339,23 @@ export const reorderProjects = mutation({
       ids.add(item.id);
 
       if (!Number.isInteger(item.order) || item.order < 1) {
-        throw new Error(`Invalid project order in reorder payload: ${item.order}`);
+        throw new Error(
+          `Invalid project order in reorder payload: ${item.order}`,
+        );
       }
       if (orders.has(item.order)) {
-        throw new Error(`Duplicate project order in reorder payload: ${item.order}`);
+        throw new Error(
+          `Duplicate project order in reorder payload: ${item.order}`,
+        );
       }
       orders.add(item.order);
     }
 
-    const existingProjects = await ctx.db.query('projects').collect();
+    const existingProjects = await ctx.db.query("projects").collect();
     if (existingProjects.length !== payload.length) {
-      throw new Error('Reorder payload must include every project exactly once.');
+      throw new Error(
+        "Reorder payload must include every project exactly once.",
+      );
     }
 
     const existingIds = new Set(existingProjects.map((project) => project._id));
@@ -274,12 +369,18 @@ export const reorderProjects = mutation({
     for (let index = 0; index < sortedOrders.length; index += 1) {
       const expected = index + 1;
       if (sortedOrders[index] !== expected) {
-        throw new Error('Project orders must be contiguous integers starting at 1.');
+        throw new Error(
+          "Project orders must be contiguous integers starting at 1.",
+        );
       }
     }
 
     for (const item of payload) {
-      await ctx.db.patch(item.id, { order: item.order });
+      const project = await ctx.db.get(item.id);
+      await ctx.db.patch(item.id, {
+        order: item.order,
+        version: (project?.version ?? 0) + 1,
+      });
     }
 
     return { updatedCount: payload.length, updatedAt: now };
@@ -288,22 +389,26 @@ export const reorderProjects = mutation({
 
 export const reorderExperiences = mutation({
   args: {
+    expectedRevision: v.number(),
     items: v.array(
       v.object({
-        id: v.id('experiences'),
+        id: v.id("experiences"),
         order: v.number(),
       }),
     ),
-    currentExperienceId: v.union(v.id('experiences'), v.null()),
+    currentExperienceId: v.union(v.id("experiences"), v.null()),
   },
   handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
     const now = Date.now();
     const payload = args.items;
 
     if (payload.length === 0) {
-      const existingExperiences = await ctx.db.query('experiences').take(1);
+      const existingExperiences = await ctx.db.query("experiences").take(1);
       if (existingExperiences.length > 0) {
-        throw new Error('Reorder payload must include all existing experiences.');
+        throw new Error(
+          "Reorder payload must include all existing experiences.",
+        );
       }
       return { updatedCount: 0, updatedAt: now, currentExperienceId: null };
     }
@@ -313,45 +418,64 @@ export const reorderExperiences = mutation({
 
     for (const item of payload) {
       if (ids.has(item.id)) {
-        throw new Error(`Duplicate experience id in reorder payload: ${item.id}`);
+        throw new Error(
+          `Duplicate experience id in reorder payload: ${item.id}`,
+        );
       }
       ids.add(item.id);
 
       if (!Number.isInteger(item.order) || item.order < 1) {
-        throw new Error(`Invalid experience order in reorder payload: ${item.order}`);
+        throw new Error(
+          `Invalid experience order in reorder payload: ${item.order}`,
+        );
       }
       if (orders.has(item.order)) {
-        throw new Error(`Duplicate experience order in reorder payload: ${item.order}`);
+        throw new Error(
+          `Duplicate experience order in reorder payload: ${item.order}`,
+        );
       }
       orders.add(item.order);
     }
 
-    const existingExperiences = await ctx.db.query('experiences').collect();
+    const existingExperiences = await ctx.db.query("experiences").collect();
     if (existingExperiences.length !== payload.length) {
-      throw new Error('Reorder payload must include every experience exactly once.');
+      throw new Error(
+        "Reorder payload must include every experience exactly once.",
+      );
     }
 
-    const existingIds = new Set(existingExperiences.map((experience) => experience._id));
+    const existingIds = new Set(
+      existingExperiences.map((experience) => experience._id),
+    );
     for (const item of payload) {
       if (!existingIds.has(item.id)) {
         throw new Error(`Unknown experience id in reorder payload: ${item.id}`);
       }
     }
 
-    if (args.currentExperienceId !== null && !existingIds.has(args.currentExperienceId)) {
-      throw new Error(`Unknown experience id for current role: ${args.currentExperienceId}`);
+    if (
+      args.currentExperienceId !== null &&
+      !existingIds.has(args.currentExperienceId)
+    ) {
+      throw new Error(
+        `Unknown experience id for current role: ${args.currentExperienceId}`,
+      );
     }
 
     const sortedOrders = [...orders].sort((a, b) => a - b);
     for (let index = 0; index < sortedOrders.length; index += 1) {
       const expected = index + 1;
       if (sortedOrders[index] !== expected) {
-        throw new Error('Experience orders must be contiguous integers starting at 1.');
+        throw new Error(
+          "Experience orders must be contiguous integers starting at 1.",
+        );
       }
     }
 
     for (const item of payload) {
+      const experience = await ctx.db.get(item.id);
       await ctx.db.patch(item.id, {
+        version: (experience?.version ?? 0) + 1,
         order: item.order,
         isCurrent: args.currentExperienceId === item.id,
       });
@@ -367,59 +491,106 @@ export const reorderExperiences = mutation({
 
 export const createProgrammingLanguage = mutation({
   args: programmingLanguageFields,
-  handler: async (ctx, args) => await ctx.db.insert('programmingLanguages', args),
+  handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
+    return await ctx.db.insert("programmingLanguages", args);
+  },
 });
 
 export const updateProgrammingLanguage = mutation({
-  args: { id: v.id('programmingLanguages'), ...programmingLanguageFields },
-  handler: async (ctx, { id, ...rest }) => {
-    await ctx.db.patch(id, rest);
+  args: {
+    clearFields: v.optional(v.array(v.string())),
+    expectedVersion: v.number(),
+    id: v.id("programmingLanguages"),
+    ...programmingLanguageFields,
+  },
+  handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
+    const {
+      id,
+      expectedVersion: _expectedVersion,
+      clearFields,
+      ...rest
+    } = args;
+    await ctx.db.patch(
+      id,
+      contentPatch(rest, programmingLanguageFields, clearFields),
+    );
     return id;
   },
 });
 
 export const deleteProgrammingLanguage = mutation({
-  args: { id: v.id('programmingLanguages') },
+  args: { expectedVersion: v.number(), id: v.id("programmingLanguages") },
   handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
     await ctx.db.delete(args.id);
   },
 });
 
 export const createTechnology = mutation({
   args: technologyFields,
-  handler: async (ctx, args) => await ctx.db.insert('technologies', args),
+  handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
+    return await ctx.db.insert("technologies", args);
+  },
 });
 
 export const updateTechnology = mutation({
-  args: { id: v.id('technologies'), ...technologyFields },
-  handler: async (ctx, { id, ...rest }) => {
-    await ctx.db.patch(id, rest);
+  args: {
+    clearFields: v.optional(v.array(v.string())),
+    expectedVersion: v.number(),
+    id: v.id("technologies"),
+    ...technologyFields,
+  },
+  handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
+    const {
+      id,
+      expectedVersion: _expectedVersion,
+      clearFields,
+      ...rest
+    } = args;
+    await ctx.db.patch(id, contentPatch(rest, technologyFields, clearFields));
     return id;
   },
 });
 
 export const deleteTechnology = mutation({
-  args: { id: v.id('technologies') },
+  args: { expectedVersion: v.number(), id: v.id("technologies") },
   handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
     await ctx.db.delete(args.id);
   },
 });
 
 export const batchSaveTechnologies = mutation({
   args: {
+    expectedRevision: v.number(),
     creates: v.array(v.object(technologyFields)),
-    updates: v.array(v.object({ id: v.id('technologies'), ...technologyFields })),
-    deletes: v.array(v.id('technologies')),
+    updates: v.array(
+      v.object({
+        id: v.id("technologies"),
+        clearFields: v.optional(v.array(v.string())),
+        ...technologyFields,
+      }),
+    ),
+    deletes: v.array(v.id("technologies")),
   },
   handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
     for (const id of args.deletes) {
       await ctx.db.delete(id);
     }
-    for (const { id, ...rest } of args.updates) {
-      await ctx.db.patch(id, rest);
+    for (const { id, clearFields, ...rest } of args.updates) {
+      const technology = await ctx.db.get(id);
+      await ctx.db.patch(id, {
+        ...contentPatch(rest, technologyFields, clearFields),
+        version: (technology?.version ?? 0) + 1,
+      });
     }
     for (const item of args.creates) {
-      await ctx.db.insert('technologies', item);
+      await ctx.db.insert("technologies", item);
     }
     return {
       deletedCount: args.deletes.length,
@@ -431,23 +602,42 @@ export const batchSaveTechnologies = mutation({
 
 export const createCloudProvider = mutation({
   args: cloudProviderFields,
-  handler: async (ctx, args) => await ctx.db.insert('cloudProviders', args),
+  handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
+    return await ctx.db.insert("cloudProviders", args);
+  },
 });
 
 export const updateCloudProvider = mutation({
-  args: { id: v.id('cloudProviders'), ...cloudProviderFields },
-  handler: async (ctx, { id, ...rest }) => {
-    await ctx.db.patch(id, rest);
+  args: {
+    clearFields: v.optional(v.array(v.string())),
+    expectedVersion: v.number(),
+    id: v.id("cloudProviders"),
+    ...cloudProviderFields,
+  },
+  handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
+    const {
+      id,
+      expectedVersion: _expectedVersion,
+      clearFields,
+      ...rest
+    } = args;
+    await ctx.db.patch(
+      id,
+      contentPatch(rest, cloudProviderFields, clearFields),
+    );
     return id;
   },
 });
 
 export const deleteCloudProvider = mutation({
-  args: { id: v.id('cloudProviders') },
+  args: { expectedVersion: v.number(), id: v.id("cloudProviders") },
   handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
     const relatedCertificates = await ctx.db
-      .query('certificates')
-      .withIndex('by_provider', (q) => q.eq('providerId', args.id))
+      .query("certificates")
+      .withIndex("by_provider", (q) => q.eq("providerId", args.id))
       .collect();
 
     for (const certificate of relatedCertificates) {
@@ -460,43 +650,78 @@ export const deleteCloudProvider = mutation({
 
 export const createCertificate = mutation({
   args: certificateFields,
-  handler: async (ctx, args) => await ctx.db.insert('certificates', args),
+  handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
+    return await ctx.db.insert("certificates", args);
+  },
 });
 
 export const updateCertificate = mutation({
-  args: { id: v.id('certificates'), ...certificateFields },
-  handler: async (ctx, { id, ...rest }) => {
-    await ctx.db.patch(id, rest);
+  args: {
+    clearFields: v.optional(v.array(v.string())),
+    expectedVersion: v.number(),
+    id: v.id("certificates"),
+    ...certificateFields,
+  },
+  handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
+    const {
+      id,
+      expectedVersion: _expectedVersion,
+      clearFields,
+      ...rest
+    } = args;
+    await ctx.db.patch(id, contentPatch(rest, certificateFields, clearFields));
     return id;
   },
 });
 
 export const deleteCertificate = mutation({
-  args: { id: v.id('certificates') },
+  args: { expectedVersion: v.number(), id: v.id("certificates") },
   handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
     await ctx.db.delete(args.id);
   },
 });
 
 export const createAboutCategory = mutation({
   args: aboutCategoryFields,
-  handler: async (ctx, args) => await ctx.db.insert('aboutCategories', args),
+  handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
+    return await ctx.db.insert("aboutCategories", args);
+  },
 });
 
 export const updateAboutCategory = mutation({
-  args: { id: v.id('aboutCategories'), ...aboutCategoryFields },
-  handler: async (ctx, { id, ...rest }) => {
-    await ctx.db.patch(id, rest);
+  args: {
+    clearFields: v.optional(v.array(v.string())),
+    expectedVersion: v.number(),
+    id: v.id("aboutCategories"),
+    ...aboutCategoryFields,
+  },
+  handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
+    const {
+      id,
+      expectedVersion: _expectedVersion,
+      clearFields,
+      ...rest
+    } = args;
+    await ctx.db.patch(
+      id,
+      contentPatch(rest, aboutCategoryFields, clearFields),
+    );
     return id;
   },
 });
 
 export const deleteAboutCategory = mutation({
-  args: { id: v.id('aboutCategories') },
+  args: { expectedVersion: v.number(), id: v.id("aboutCategories") },
   handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
     const relatedItems = await ctx.db
-      .query('aboutItems')
-      .withIndex('by_category', (q) => q.eq('categoryId', args.id))
+      .query("aboutItems")
+      .withIndex("by_category", (q) => q.eq("categoryId", args.id))
       .collect();
 
     for (const item of relatedItems) {
@@ -509,20 +734,36 @@ export const deleteAboutCategory = mutation({
 
 export const createAboutItem = mutation({
   args: aboutItemFields,
-  handler: async (ctx, args) => await ctx.db.insert('aboutItems', args),
+  handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
+    return await ctx.db.insert("aboutItems", args);
+  },
 });
 
 export const updateAboutItem = mutation({
-  args: { id: v.id('aboutItems'), ...aboutItemFields },
-  handler: async (ctx, { id, ...rest }) => {
-    await ctx.db.patch(id, rest);
+  args: {
+    clearFields: v.optional(v.array(v.string())),
+    expectedVersion: v.number(),
+    id: v.id("aboutItems"),
+    ...aboutItemFields,
+  },
+  handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
+    const {
+      id,
+      expectedVersion: _expectedVersion,
+      clearFields,
+      ...rest
+    } = args;
+    await ctx.db.patch(id, contentPatch(rest, aboutItemFields, clearFields));
     return id;
   },
 });
 
 export const deleteAboutItem = mutation({
-  args: { id: v.id('aboutItems') },
+  args: { expectedVersion: v.number(), id: v.id("aboutItems") },
   handler: async (ctx, args) => {
+    await prepareWrite(ctx, args);
     await ctx.db.delete(args.id);
   },
 });

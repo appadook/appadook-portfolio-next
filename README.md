@@ -1,118 +1,63 @@
-# Portfolio Platform Monorepo
+# Portfolio Platform
 
-This repository is a Turborepo monorepo with:
+A public portfolio and owner-only CMS, built as a Bun/Turborepo monorepo.
 
-- Next.js App Router frontend (`apps/web`)
-- Convex backend package (`packages/backend`)
-- WAY Auth SDK-based admin authentication using the Next adapter (`@way/auth-sdk/next`)
+| Layer          | Technology                                                                            |
+| -------------- | ------------------------------------------------------------------------------------- |
+| Web            | Next.js 16.3.5 App Router, React 19.3, TypeScript                                     |
+| UI             | Tailwind CSS 3, Radix/shadcn components, dnd-kit                                      |
+| Data           | Convex 1.46 (database, realtime subscriptions, storage, scheduled jobs)               |
+| Authentication | Better Auth 1.6.33 with the Convex Better Auth component 0.12.5; GitHub OAuth         |
+| Verification   | Vitest/convex-test, Playwright desktop and mobile, ESLint, TypeScript, GitHub Actions |
+| Tooling        | Node 22.12+, Bun 1.3.2, Turborepo                                                     |
 
-## Repository Structure
+Better Auth is deliberately pinned to the Convex adapter's supported 1.6 range. Update the adapter and auth library together. The icon package is pinned because newer minor releases remove existing brand exports.
 
-- `apps/web`: Public portfolio site and in-app admin CMS UI.
-- `packages/backend`: App-agnostic Convex schema and function modules.
-- `packages/way-auth-sdk`: Internal workspace copy of `@way/auth-sdk` used by the web app.
+## Start
 
-## Frontend Architecture (apps/web)
-
-The web app is layered to keep responsibilities explicit:
-
-- `src/app`: route composition, layouts, API route handlers.
-- `src/features/*`: feature-owned UI, hooks, and transport adapters.
-- `src/server/*`: server-only authority (session/env/backend access).
-- `src/lib/*`: cross-feature primitives only.
-- `src/components/ui`: shared design-system primitives.
-
-Reference: `apps/web/ARCHITECTURE.md`.
-
-## Tech Stack
-
-- Bun (package manager + scripts)
-- Turborepo (monorepo task orchestration)
-- Next.js 15 App Router + React 18
-- Tailwind CSS + shadcn/ui
-- Convex (database, realtime sync, mutations, queries)
-- `@way/auth-sdk/next` (Next.js-first authentication integration)
-
-## Rendering Model (SSR / CSR / RSC)
-
-- RSC/SSR:
-  - Route entry files in `apps/web/src/app/**/page.tsx` are server components by default.
-  - Admin route gating (`/admin`) validates auth via `src/server/auth/session.ts`.
-- CSR:
-  - Interactive portfolio sections and admin CMS editor are feature client components.
-  - Convex live data subscriptions (`useQuery`) run in client components for realtime updates.
-- Middleware auth:
-  - `apps/web/middleware.ts` re-exports WAY SDK middleware (`auth.middleware`) for `/admin/*`.
-
-## Route Groups and URLs
-
-- `src/app/(public)/page.tsx` maps to `/`.
-- `src/app/(app)/admin/*` maps to `/admin/*`.
-- Route groups organize code only; URL paths remain unchanged.
-
-## Environment Variables
-
-For the web app, create `apps/web/.env.local` (or use `apps/web/.env.prod` for production values):
-
-```bash
-# Convex
-NEXT_PUBLIC_CONVEX_URL=https://your-deployment.convex.cloud
-
-# WAY Auth
-# Required for browser runtime (proxy mode):
-NEXT_PUBLIC_WAY_AUTH_BASE_URL=https://your-app.vercel.app
-# Server-side fallback (same app origin):
-WAY_AUTH_BASE_URL=https://your-app.vercel.app
-# Upstream auth service target used by Next rewrites:
-WAY_AUTH_UPSTREAM_URL=https://way-my-auth-service.vercel.app
-
-# Important: keep all WAY auth URLs as origin-only values:
-# - no trailing slash
-# - no path/query/hash
-
-```
-
-## Local Development
-
-Install deps from repo root:
-
-```bash
-bun install
-```
-
-Run web + convex (two terminals):
-
-```bash
-bun run dev:web
+```sh
+bun install --frozen-lockfile
+cp apps/web/.env.example apps/web/.env.local
 bun run dev:convex
+# In another terminal:
+bun run dev:web
 ```
 
-Or run all turbo dev tasks:
+Configure the deployment and GitHub OAuth first using [DEPLOYMENT.md](DEPLOYMENT.md). The local frontend can build without live service credentials, but authenticated editing requires a configured Convex deployment. Do not put secrets in `NEXT_PUBLIC_*` variables.
 
-```bash
-bun run dev
-```
+## Project layout
 
-## Build / Lint / Typecheck
+- `apps/web/src/app`: routes, metadata, API handlers, layouts.
+- `apps/web/src/features/public`: server-composed portfolio with the original animated sections.
+- `apps/web/src/features/admin`: interactive CMS, editor recovery, ordering, uploads, publishing, contact inbox.
+- `apps/web/src/server`: server-only auth and cached backend access.
+- `packages/backend/convex`: schema, owner authorization, content, publication, storage and contact delivery.
+- `packages/backend/tests`: backend authorization and data integrity tests.
+- `apps/web/tests`: browser tests and an isolated admin component harness.
 
-```bash
+See [frontend architecture](apps/web/ARCHITECTURE.md) and [backend notes](packages/backend/README.md).
+
+## Behavior
+
+The public route fetches and caches content on the server, then composes the original portfolio sections. Client boundaries preserve the existing Framer Motion animations, typewriter, parallax, project carousel/modals, technology marquee and automatic Spline background. The original Midnight Luxe CSS and layouts are retained. Server-rendered content has a no-JavaScript visibility fallback. Architecture changes must preserve the existing visual and interaction design.
+
+GitHub account **appadook**, identified by immutable provider ID **168853630**, is the sole admin. The application owns its auth integration, with users, accounts and sessions stored in the Convex Better Auth component. There is no password signup or first-user ownership claim. WAY Auth has been removed.
+
+Editing saves drafts. Preview is authenticated; Publish makes a consistent snapshot public. All public queries read that snapshot. Existing content remains public until the first edit freezes the initial snapshot. Stale writes are rejected with version checks. Unsaved individual editor drafts recover within the same browser tab; explicit discard loads the current saved version. Bulk ordering/technology edits warn before navigation but are not persisted as recovery drafts.
+
+Contact submissions are durably queued in Convex. Optional Resend notifications retry after errors; messages remain available in the owner inbox. Media uploads require owner authorization and validate size, type and header signature. Draft and published media references are protected during cleanup.
+
+## Checks
+
+```sh
 bun run lint
 bun run typecheck
+bun run test
 bun run build
+bun audit
+cd apps/web
+bunx playwright install chromium
+bun run test:e2e
 ```
 
-## Admin Routes
-
-- `/admin/login`
-- `/admin/signup`
-- `/admin`
-
-Admin auth is powered by generated Next SDK integration:
-
-- `apps/web/src/lib/auth.ts` (single `createWayAuthNext()` surface)
-- `apps/web/middleware.ts` (SDK middleware re-export)
-
-## BFF Endpoints
-
-- `GET /api/auth/me`
-- `GET /api/portfolio/snapshot`
+Browser tests run against local fixtures, with no production reads/writes or real email delivery. Admin component tests use a separate Vite server and do not test OAuth itself. Live OAuth and delivery smoke tests are documented in the rollout checklist.

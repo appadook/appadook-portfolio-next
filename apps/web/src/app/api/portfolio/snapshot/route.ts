@@ -1,10 +1,13 @@
-import { NextResponse } from 'next/server';
 import { getPortfolioSnapshot } from '@/server/backend/portfolio';
-
-export const dynamic = 'force-static';
-export const revalidate = 60;
-
 export async function GET() {
-  const snapshot = await getPortfolioSnapshot();
-  return NextResponse.json(snapshot);
+  try {
+    return Response.json(await getPortfolioSnapshot(), {
+      headers: { 'Cache-Control': 'public, max-age=0, s-maxage=60' },
+    });
+  } catch {
+    return Response.json(
+      { error: 'Content temporarily unavailable' },
+      { status: 503 },
+    );
+  }
 }
