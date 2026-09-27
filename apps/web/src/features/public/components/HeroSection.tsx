@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { motion, useScroll, useTransform } from "framer-motion";
@@ -21,7 +23,6 @@ const HeroSection = ({ siteSettings }: { siteSettings: SiteSettings }) => {
 
   useEffect(() => {
     let currentIndex = 0;
-    setDisplayedText("");
     const interval = setInterval(() => {
       if (currentIndex <= fullText.length) {
         setDisplayedText(fullText.slice(0, currentIndex));
@@ -196,7 +197,7 @@ const HeroSection = ({ siteSettings }: { siteSettings: SiteSettings }) => {
             <div className="flex items-center gap-2 sm:gap-4">
               <span className="w-4 sm:w-8 h-px bg-primary" />
               <span className="font-mono text-base sm:text-lg md:text-xl text-primary">
-                {displayedText}
+                <span data-typewriter>{displayedText}</span><span className="typewriter-fallback hidden">{fullText}</span>
                 <motion.span
                   className="inline-block w-0.5 h-5 bg-primary ml-1"
                   animate={{ opacity: [1, 0, 1] }}

@@ -45,3 +45,10 @@ yarn-error.log*
 .vscode/
 .claude/
 */CLAUDE.md
+
+# Browser tests
+**/playwright-report/
+**/test-results/
+
+# Isolated browser-test Next server
+.next-test/

@@ -1,25 +1,30 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
-import { Providers } from '@/app/providers';
 
-const metadataBaseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+const metadataBaseUrl =
+  process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
 export const metadata: Metadata = {
   metadataBase: new URL(metadataBaseUrl),
   title: 'Kurtik Appadoo - Portfolio',
-  description: 'Kurtik Appadoo portfolio with projects, experience, and contact.',
+  description:
+    'Kurtik Appadoo portfolio with projects, experience, and contact.',
   icons: {
     icon: '/ka-logo-final.svg',
     shortcut: '/ka-logo-final.svg',
     apple: '/ka-logo-final.svg',
   },
+  alternates: { canonical: '/' },
   openGraph: {
-    images: ['/ka-logo-final.svg'],
+    type: 'website',
+    title: 'Kurtik Appadoo — Portfolio',
+    description:
+      'Software, data, and research. Explore projects and experience.',
   },
-  twitter: {
-    images: ['/ka-logo-final.svg'],
-  },
+  twitter: { card: 'summary_large_image', images: ['/opengraph-image'] },
 };
+
+export const viewport: Viewport = { themeColor: '#101014' };
 
 export default function RootLayout({
   children,
@@ -28,9 +33,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>
-        <Providers>{children}</Providers>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

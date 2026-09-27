@@ -1,4 +1,4 @@
-import type { FunctionReference } from 'convex/server';
+import type { FunctionReference } from "convex/server";
 
 export type AdminUser = {
   id: string;
@@ -32,26 +32,27 @@ export type BootstrapData = {
   aboutItems: AdminEntity[];
 };
 
-export type InspectorMode = 'view' | 'edit' | 'create' | 'deleteConfirm';
+export type InspectorMode = "view" | "edit" | "create" | "deleteConfirm";
 
 export type EntitySectionId =
-  | 'experiences'
-  | 'projects'
-  | 'languages'
-  | 'technologies'
-  | 'providers'
-  | 'certificates'
-  | 'about-categories'
-  | 'about-items';
+  | "experiences"
+  | "projects"
+  | "languages"
+  | "technologies"
+  | "providers"
+  | "certificates"
+  | "about-categories"
+  | "about-items";
 
-export type SectionId = 'site-settings' | EntitySectionId;
+export type SectionId = "site-settings" | "media" | "inbox" | EntitySectionId;
 
 export type SelectOption = {
   label: string;
   value: string;
 };
 
-export type FieldType = 'text' | 'textarea' | 'number' | 'csv' | 'list' | 'select' | 'icon-picker';
+export type FieldType =
+  "text" | "textarea" | "number" | "csv" | "list" | "select" | "icon-picker";
 
 export type FormFieldConfig = {
   key: string;
@@ -64,7 +65,7 @@ export type FormFieldConfig = {
 export type MediaFieldConfig = {
   key: string;
   label: string;
-  kind: 'image' | 'logo' | 'resumePdf';
+  kind: "image" | "logo" | "resumePdf";
   required?: boolean;
 };
 
@@ -77,7 +78,7 @@ export type AdminSectionConfig = {
   fields: FormFieldConfig[];
   mediaFields: MediaFieldConfig[];
   items: AdminEntity[];
-  createMutation: FunctionReference<'mutation'>;
-  updateMutation: FunctionReference<'mutation'>;
-  deleteMutation: FunctionReference<'mutation'>;
+  createMutation: FunctionReference<"mutation">;
+  updateMutation: FunctionReference<"mutation">;
+  deleteMutation: FunctionReference<"mutation">;
 };

@@ -1,9 +1,8 @@
+import { connection } from 'next/server';
 import PortfolioPage from '@/features/public/PortfolioPage';
 import { getPortfolioSnapshot } from '@/server/backend/portfolio';
-
-export const revalidate = 60;
-
 export default async function HomePage() {
-  const snapshot = await getPortfolioSnapshot();
-  return <PortfolioPage snapshot={snapshot} />;
+  // Render on the server using shared cached content, without requiring backend access at build time.
+  await connection();
+  return <PortfolioPage snapshot={await getPortfolioSnapshot()} />;
 }

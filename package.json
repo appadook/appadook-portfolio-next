@@ -1,7 +1,7 @@
 {
   "name": "portfolio-platform",
   "private": true,
-  "packageManager": "bun@1.1.42",
+  "packageManager": "bun@1.3.2",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -12,9 +12,13 @@
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
     "dev:web": "turbo -F web dev",
-    "dev:convex": "turbo -F @portfolio/backend dev"
+    "dev:convex": "turbo -F @portfolio/backend dev",
+    "test": "turbo test"
   },
   "devDependencies": {
-    "turbo": "^2.3.3"
+    "turbo": "^2.11.2"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

@@ -1,6 +1,8 @@
+'use client';
+
 import Image from 'next/image';
 import { X, Github, ExternalLink, Calendar, User, Code, Sparkles, Target } from 'lucide-react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import type { Project } from '@/features/public/types';
 
 interface ProjectModalProps {
@@ -14,7 +16,7 @@ const ProjectModal = ({ project, isOpen, onClose }: ProjectModalProps) => {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-card border border-border/50 p-0">
+      <DialogContent aria-describedby={undefined} className="max-w-4xl max-h-[90vh] overflow-y-auto bg-card border border-border/50 p-0">
         {/* Hero Image */}
         <div className="relative h-56 md:h-72 overflow-hidden">
           {project.image ? (
@@ -37,6 +39,7 @@ const ProjectModal = ({ project, isOpen, onClose }: ProjectModalProps) => {
 
           {/* Close button */}
           <button
+            aria-label="Close project"
             onClick={onClose}
             className="absolute top-4 right-4 p-2 rounded-full bg-background/80 backdrop-blur-sm border border-border/50 text-muted-foreground hover:text-foreground hover:border-primary/50 transition-all duration-300"
           >
@@ -52,9 +55,9 @@ const ProjectModal = ({ project, isOpen, onClose }: ProjectModalProps) => {
                 </span>
               ))}
             </div>
-            <h2 className="font-display text-2xl md:text-3xl font-semibold text-foreground">
+            <DialogTitle className="font-display text-2xl md:text-3xl font-semibold text-foreground">
               {project.title}
-            </h2>
+            </DialogTitle>
           </div>
         </div>
 
@@ -192,7 +195,8 @@ const ProjectModal = ({ project, isOpen, onClose }: ProjectModalProps) => {
               </a>
             )}
             <button
-              onClick={onClose}
+              aria-label="Close project"
+            onClick={onClose}
               className="ml-auto inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-primary text-primary-foreground font-medium hover:opacity-90 transition-opacity"
             >
               Close

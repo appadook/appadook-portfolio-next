@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { AdminSessionBootstrap } from '@/app/(app)/admin/session-bootstrap';
+import type { Metadata } from 'next';
+export const metadata: Metadata = { title: 'Portfolio workspace', robots: { index: false, follow: false }, alternates: { canonical: null } };
 
 const adminFontVars: CSSProperties = {
   ['--font-admin-display' as string]: '"Bebas Neue", "Arial Narrow", "Impact", sans-serif',
@@ -10,7 +11,6 @@ const adminFontVars: CSSProperties = {
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
     <div className="admin-font-scope" style={adminFontVars}>
-      <AdminSessionBootstrap />
       {children}
     </div>
   );

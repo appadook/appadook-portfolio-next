@@ -1,71 +1,37 @@
-# apps/web Architecture
+# Frontend architecture
 
-## Layer Rules
+## Rendering and data flow
 
-1. `src/app/*`
-- Routing, page/layout composition, and route handlers only.
-- No feature business logic.
+`app/(public)/page.tsx` is a request-rendered Server Component. It reads a cached published snapshot through `server/backend/portfolio.ts`, then renders `features/public/PortfolioPage.tsx` on the server. The data cache uses a 60-second revalidation interval and the `portfolio` tag. Publish schedules an authenticated call to `/api/revalidate`; retries and time-based revalidation provide recovery when that call fails. Cache errors are thrown, not converted to an empty published site.
 
-2. `src/features/*`
-- Feature-owned UI, hooks, local transport, and domain helpers.
-- Feature UI components should not call `fetch()` directly.
+The route and `PortfolioPage` composition remain Server Components. Each existing animated section has an explicit client boundary because Framer Motion, filters, carousels and modals require browser state. `PortfolioFrame` accepts server-composed children and preserves the original page entrance and automatic Spline background. Public pages do not load Convex's realtime provider. The original Midnight Luxe CSS, section markup, hover effects, scrolling, technology marquee and modal interactions are retained; RSC migration is not permission to redesign them. A scoped no-JavaScript fallback reveals server-rendered content without changing the normal animated experience.
 
-3. `src/server/*`
-- Server-only authority for auth/session/env/backend access.
-- Must not be imported by client components.
+`/admin` authenticates on the server and fetches the initial bootstrap before rendering. A scoped Better Auth/Convex provider enables realtime updates. `/admin/preview` uses an owner-authorized query and the same server portfolio renderer; it does not read the public cache. Admin routes are dynamic and noindex with private/no-store headers.
 
-4. `src/lib/*`
-- Cross-feature shared primitives (HTTP wrapper, utility helpers).
-- Keep this small and framework-agnostic where possible.
+## Authorization boundaries
 
-5. `src/components/ui/*`
-- Shared design system primitives only.
+- `/api/auth/[...all]` forwards the Better Auth integration to Convex's HTTP endpoint.
+- `server/auth/session.ts` validates the owner for private server rendering.
+- `proxy.ts` sets private headers; it is not the authorization boundary.
+- Every content mutation, upload operation, draft query, publish operation and inbox operation independently validates the active session and GitHub owner in Convex.
+- `lib/auth-client.ts` is the sole browser auth client. There is no custom token store or password flow.
 
-## Allowed Import Direction
+## Admin composition
 
-1. `app` -> `features`, `server`, `lib`, `components/ui`
-2. `features` -> `features/<same feature>`, `lib`, `components/ui`
-3. `server` -> `server`, `lib`, backend/client SDKs
-4. `lib` -> `lib` only (and external packages)
+`AdminDashboard` composes the workspace, section configuration and ordering state. `EntityInspector`, `SettingsInspector`, `MediaFields`, `Ordering`, `TechnologyEditor` and `ContentCards` own focused UI responsibilities. URL parameters hold the current section, record and editor mode. Exactly one inspector is mounted at each breakpoint.
 
-Disallowed:
-- `features/*/components` importing `src/server/*`
-- UI components importing generated Convex API directly
-- `fetch()` calls inside feature component files
+`useEditorDraft` freezes the base document version and keeps individual unsaved forms in sessionStorage. Realtime updates cannot silently replace an active form. A rejected stale save preserves the form; Discard reloads the latest saved document. Record writes use document versions; settings and bulk writes use publication revisions. Cmd/Ctrl+Enter submits the active form.
 
-## Auth Flow
+## Placement
 
-1. `middleware.ts` applies coarse route gating for `/admin/*`.
-2. Server authority is in `src/server/auth/session.ts`.
-3. Admin page uses `requireAdminSessionOrRedirect()`.
-4. Client auth actions use `auth.client.*` via `src/lib/auth.ts`.
+- `app`: thin route composition, HTTP handlers, metadata and layouts.
+- `features`: feature UI, hooks, API adapters and helpers. Client UI must never import server-only modules.
+- `server`: auth, environment and cached reads; all authority is server-only.
+- `lib`: small cross-feature helpers and the browser auth client.
+- `components/ui`: shared primitives.
 
-## Data Flow (Hybrid BFF)
+Generated Convex references are typed contracts and may be imported by admin components that use Convex hooks. HTTP transport should stay small and handle failure explicitly. Avoid adding page-wide client boundaries or realtime subscriptions to the public site.
 
-1. Public snapshot:
-- Server path: `src/server/backend/portfolio.ts`
-- BFF: `GET /api/portfolio/snapshot`
-- Client wrapper: `src/features/public/api/portfolio.ts`
+## Verification
 
-2. Auth identity:
-- BFF: `GET /api/auth/me`
-- Client wrapper: `src/features/admin/api/me.ts`
-
-3. Admin realtime CRUD:
-- Uses Convex hooks through feature-level adapter modules.
-- Full BFF migration for realtime flows is deferred.
-
-## Feature Template
-
-For new features, prefer:
-
-```
-src/features/<feature>/
-  components/
-  hooks/
-  api/
-  lib/
-  index.ts
-```
-
-Keep route files thin and feature boundaries strict.
+Playwright exercises public SSR without JavaScript, the original project modals/mobile carousel, automatic background mounting, marquee animation, contact failures, endpoint protection and private route redirects. Browser tests stub the external Spline custom element to keep remote WebGL work out of deterministic interaction checks. Test Next servers use a separate `.next-test` output directory so they do not stop the owner's localhost dev server. A test-only Vite application mounts the real admin components with local in-memory query/mutation adapters. The harness is outside `src/app`, cannot be deployed as a Next route, and does not bypass production auth. Backend tests separately exercise real Convex functions and the auth component with synthetic sessions.

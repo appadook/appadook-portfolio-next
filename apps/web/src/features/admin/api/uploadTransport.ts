@@ -1,49 +1,73 @@
-import type { Id } from '@portfolio/backend/convex/_generated/dataModel';
+import type { Id } from "@portfolio/backend/convex/_generated/dataModel";
 
 export type UploadedStorageAsset = {
-  storageId: Id<'_storage'>;
+  storageId: Id<"_storage">;
   url: string;
   fileName: string;
 };
 
 export async function uploadAssetWithSignedUrl(input: {
   file: File;
+  onProgress?: (progress: number) => void;
+  signal?: AbortSignal;
   generateUploadUrl: () => Promise<string>;
-  resolveStorageUrl: (args: { storageId: Id<'_storage'> }) => Promise<string | null>;
+  resolveStorageUrl: (args: {
+    storageId: Id<"_storage">;
+    fileName?: string;
+  }) => Promise<string | null>;
 }): Promise<UploadedStorageAsset> {
   const { file, generateUploadUrl, resolveStorageUrl } = input;
   const uploadUrl = await generateUploadUrl();
 
-  const uploadResponse = await fetch(uploadUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': file.type || 'application/octet-stream' },
-    body: file,
+  const payload = await new Promise<{ storageId: string }>(
+    (resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", uploadUrl);
+      xhr.setRequestHeader(
+        "Content-Type",
+        file.type || "application/octet-stream",
+      );
+      xhr.timeout = 120000;
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable)
+          input.onProgress?.(Math.round((event.loaded / event.total) * 90));
+      };
+      const abort = () => xhr.abort();
+      input.signal?.addEventListener("abort", abort, { once: true });
+      xhr.onloadend = () => input.signal?.removeEventListener("abort", abort);
+      xhr.onerror = xhr.ontimeout = () =>
+        reject(
+          new Error("Upload failed. Check your connection and try again."),
+        );
+      xhr.onabort = () => reject(new Error("Upload cancelled."));
+      xhr.onload = () => {
+        try {
+          const body = JSON.parse(xhr.responseText);
+          if (xhr.status < 200 || xhr.status >= 300 || !body.storageId)
+            throw new Error("Upload rejected.");
+          resolve(body);
+        } catch {
+          reject(new Error("Upload failed. Please try again."));
+        }
+      };
+      if (input.signal?.aborted) {
+        reject(new Error("Upload cancelled."));
+        return;
+      }
+      xhr.send(file);
+    },
+  );
+
+  const storageId = payload.storageId as Id<"_storage">;
+  const resolvedUrl = await resolveStorageUrl({
+    storageId,
+    fileName: file.name,
   });
-
-  if (!uploadResponse.ok) {
-    throw new Error('Upload failed. Please try again.');
-  }
-
-  const uploadResponseClone = uploadResponse.clone();
-  let payload: { storageId?: string };
-  try {
-    payload = (await uploadResponse.json()) as { storageId?: string };
-  } catch (error) {
-    const rawBody = await uploadResponseClone.text().catch(() => '<unavailable>');
-    const errorMessage = error instanceof Error ? ` ${error.message}` : '';
-    throw new Error(`Upload failed (${uploadResponse.status}). ${rawBody}${errorMessage}`);
-  }
-
-  if (!payload.storageId) {
-    throw new Error('Upload failed. Missing storage id.');
-  }
-
-  const storageId = payload.storageId as Id<'_storage'>;
-  const resolvedUrl = await resolveStorageUrl({ storageId });
   if (!resolvedUrl) {
-    throw new Error('Unable to resolve uploaded file URL.');
+    throw new Error("Unable to resolve uploaded file URL.");
   }
 
+  input.onProgress?.(100);
   return {
     storageId,
     url: resolvedUrl,

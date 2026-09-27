@@ -1,3 +1,5 @@
+'use client';
+
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Send, Mail, Phone, MapPin, Github, Linkedin } from 'lucide-react';
@@ -12,6 +14,8 @@ const ContactSection = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const [feedback, setFeedback] = useState('');
+  const [failed, setFailed] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({
@@ -24,16 +28,19 @@ const ContactSection = () => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Simulate form submission
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    setFeedback(''); setFailed(false);
+    try {
+      const response = await fetch('/api/contact', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Please try again later.');
+      toast({ title: 'Message received!', description: "Thank you for reaching out. I'll get back to you soon." });
+      setFeedback('Message received. Thank you for reaching out!');
+      setFormData({ name: '', email: '', message: '' });
+    } catch (error) {
+      setFailed(true);
+      setFeedback(error instanceof Error ? error.message : 'Your message could not be sent. Please try again.');
+    } finally { setIsSubmitting(false); }
 
-    toast({
-      title: "Message sent!",
-      description: "Thank you for reaching out. I'll get back to you soon.",
-    });
-
-    setFormData({ name: '', email: '', message: '' });
-    setIsSubmitting(false);
   };
 
   const contactInfo = [
@@ -147,12 +154,10 @@ const ContactSection = () => {
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-muted-foreground mb-2">
-                      Name
-                    </label>
+                    <label htmlFor="contact-name" className="block text-sm font-medium text-muted-foreground mb-2">Name</label>
                     <input
                       type="text"
-                      name="name"
+                      id="contact-name" name="name" maxLength={100}
                       placeholder="Your name"
                       value={formData.name}
                       onChange={handleInputChange}
@@ -161,12 +166,10 @@ const ContactSection = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-muted-foreground mb-2">
-                      Email
-                    </label>
+                    <label htmlFor="contact-email" className="block text-sm font-medium text-muted-foreground mb-2">Email</label>
                     <input
                       type="email"
-                      name="email"
+                      id="contact-email" name="email" maxLength={254}
                       placeholder="your@email.com"
                       value={formData.email}
                       onChange={handleInputChange}
@@ -177,11 +180,9 @@ const ContactSection = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-muted-foreground mb-2">
-                    Message
-                  </label>
+                  <label htmlFor="contact-message" className="block text-sm font-medium text-muted-foreground mb-2">Message</label>
                   <textarea
-                    name="message"
+                    id="contact-message" name="message" maxLength={5000}
                     placeholder="Tell me about your project or just say hello..."
                     value={formData.message}
                     onChange={handleInputChange}
@@ -213,6 +214,7 @@ const ContactSection = () => {
                     </span>
                   )}
                 </motion.button>
+                {feedback && <p role={failed ? "alert" : "status"} className={failed ? "text-sm text-destructive" : "text-sm text-primary"}>{feedback}</p>}
               </form>
             </div>
           </motion.div>

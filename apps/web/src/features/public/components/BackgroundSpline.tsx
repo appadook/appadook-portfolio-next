@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 
 const BackgroundSpline = () => {
   useEffect(() => {
-    void import('@splinetool/viewer');
+    void import('@splinetool/viewer').catch(() => { /* Keep the portfolio usable if the remote viewer fails. */ });
   }, []);
 
   return (
